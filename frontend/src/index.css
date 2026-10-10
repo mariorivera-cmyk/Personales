@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Playfair+Display:ital,wght@0,600;1,500&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    margin: 0;
+    font-family: "DM Sans", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background: #FAF7F2;
+    color: #0F172A;
+}
+h1, h2, h3, h4, .font-heading { font-family: "Plus Jakarta Sans", sans-serif; }
+.font-display { font-family: "Playfair Display", serif; }
+.font-mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+::selection { background: #C2410C; color: #fff; }
+
+@layer base {
+    :root {
+        --background: 36 33% 97%;
+        --foreground: 222 47% 11%;
+        --card: 0 0% 100%;
+        --card-foreground: 222 47% 11%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 222 47% 11%;
+        --primary: 17 88% 40%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 36 30% 93%;
+        --secondary-foreground: 222 47% 11%;
+        --muted: 36 25% 94%;
+        --muted-foreground: 215 16% 40%;
+        --accent: 36 40% 92%;
+        --accent-foreground: 222 47% 11%;
+        --destructive: 347 77% 50%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 30 20% 87%;
+        --input: 30 20% 85%;
+        --ring: 17 88% 40%;
+        --chart-1: 17 88% 40%;
+        --chart-2: 160 84% 30%;
+        --chart-3: 38 92% 44%;
+        --chart-4: 347 77% 50%;
+        --chart-5: 215 25% 27%;
+        --radius: 0.75rem;
+    }
+}
+
+@layer base {
+    * { @apply border-border; }
+    body { @apply bg-background text-foreground; }
+}
+
+.fade-up { animation: fadeUp .45s ease both; }
+.fade-up-2 { animation: fadeUp .45s ease .08s both; }
+.fade-up-3 { animation: fadeUp .45s ease .16s both; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.wa-bg { background-color: #EFE7DD; background-image: radial-gradient(rgba(18,140,126,.07) 1px, transparent 1px); background-size: 14px 14px; }
+.grain { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.9'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E"); }
+@layer components {
+    .field { @apply h-10 w-full rounded-lg border border-input bg-white px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20; }
+}
+
+@layer base {
+    [data-debug-wrapper="true"] { display: contents !important; }
+}

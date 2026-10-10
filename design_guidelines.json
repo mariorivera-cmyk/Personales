@@ -1,0 +1,94 @@
+{
+  "project_title": "GlowSalon SaaS - Multi-tenant Beauty Salon Management & AI WhatsApp Booking Platform",
+  "language": "es-ES",
+  "design_archetype": "Organic & Earthy Modern Luxury (Atelier Chic)",
+  "theme_strategy": {
+    "default_mode": "light",
+    "toggle_supported": true,
+    "rationale": "Beauty, spa, and salon platforms thrive on warm, clean, organic aesthetics with high contrast, natural tones, and crisp status markers for agenda scanning."
+  },
+  "typography": {
+    "heading_font": "Plus Jakarta Sans, sans-serif",
+    "body_font": "DM Sans, sans-serif",
+    "accent_font": "Playfair Display, serif",
+    "mono_font": "JetBrains Mono, monospace",
+    "font_pairing_strategy": "Warm Editorial High-End: Playfair Display for decorative titles/badges, Plus Jakarta Sans for structural headings & subheadings, DM Sans for crisp UI text & form fields.",
+    "hierarchy_rules": {
+      "h1_hero": "text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight",
+      "h2_section": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight",
+      "h3_subsection": "text-xl sm:text-2xl font-semibold tracking-tight",
+      "h4_card": "text-lg sm:text-xl font-medium",
+      "body_main": "text-base leading-relaxed text-slate-700 dark:text-slate-300",
+      "small_label": "text-xs font-semibold uppercase tracking-wider text-slate-500"
+    },
+    "forbidden_fonts": ["Inter for main headers", "Space Grotesk", "Comic Sans"]
+  },
+  "colors": {
+    "base_background": "bg-[#FAF7F2] dark:bg-[#0F172A]",
+    "card_background": "bg-white/90 dark:bg-slate-900/90 backdrop-blur-md",
+    "primary": {
+      "brand_rose": "#D97706",
+      "brand_rose_accent": "#E11D48",
+      "brand_terracotta": "#C2410C",
+      "brand_emerald": "#059669"
+    },
+    "whatsapp_green": {
+      "primary": "#25D366",
+      "dark": "#128C7E",
+      "light_bg": "#DCF8C6"
+    },
+    "slate_neutrals": {
+      "900": "#0F172A",
+      "800": "#1E293B",
+      "700": "#334155",
+      "600": "#475569",
+      "400": "#94A3B8",
+      "200": "#E2E8F0",
+      "100": "#F1F5F9",
+      "50": "#F8FAFC"
+    },
+    "status": {
+      "confirmed": "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300",
+      "pending": "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300",
+      "cancelled": "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/50 dark:text-rose-300",
+      "in_progress": "bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950/50 dark:text-sky-300",
+      "completed": "bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-950/50 dark:text-purple-300"
+    },
+    "forbidden_colors": ["#7351B7 (for AI page)", "#1B93A4 (for dashboards)"]
+  },
+  "layout_and_spacing": {
+    "padding_system": "Generous spacing philosophy: p-6 to p-12 for dashboard cards and panels to avoid cramming",
+    "bento_grid_mode": "High Density Grid Mode B for multi-tenant analytics & Tetris Grid Mode A for public salon portal (/b/slug)",
+    "calendar_grid_layout": "Multi-column timeline sticky header per stylist, 15/30-minute incremental slots, color-coded by service category",
+    "navigation": "Top fixed blur header for public portal (z-50) & left collapsible vertical sidebar for tenant/superadmin dashboards"
+  },
+  "component_guidelines": {
+    "shadcn_js_usage": "Always import from @/components/ui/ (e.g., button.jsx, dialog.jsx, dropdown-menu.jsx, tabs.jsx, calendar.jsx, sheet.jsx, select.jsx). Note files are .jsx or .js in this workspace.",
+    "custom_components": {
+      "whatsapp_simulator": "Floating/Embedded WhatsApp Chat Drawer mimicking official iOS/Android WhatsApp interface with AI Claude Sonnet 4.5 assistant badge, interactive quick-replies, automated reminder templates, and appointment confirmation preview.",
+      "public_booking_portal": "Public URL view (/b/:slug) with customizable hero image, service menu accordion, stylist selector cards, date/time picker, cross-selling/upselling add-on suggestions before checkout, and instant WhatsApp confirmation preview.",
+      "super_admin_panel": "Platform-wide MRR/ARR charts, active tenants table, module toggle matrix (CRM, Loyalty, Waiting List, AI Bot, Multi-branch), plan management, and billing status with delinquency warning/suspension controls.",
+      "smart_calendar_agenda": "Interactive day/week/month view by branch & stylist with drag-and-drop time slots, quick booking popover, waitlist match alerts, and conflict notifications.",
+      "loyalty_and_upsell_engine": "Points calculator card, discount coupon generator, and automated AI rule suggestions (e.g. 'Sugerir Tratamiento Capilar Reparador al reservar Balayage (+25.00€)')."
+    }
+  },
+  "image_urls": {
+    "hero_salon_1": "https://images.unsplash.com/photo-1600948836101-f9ffda59d250?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwxfHxiZWF1dHklMjBzYWxvbiUyMGludGVyaW9yJTIwbW9kZXJuJTIwaGFpcmN1dCUyMHN0eWxpc3R8ZW58MHx8fHwxNzkxNjYzMTI4fDA&ixlib=rb-4.1.0&q=85",
+    "hero_salon_2": "https://images.unsplash.com/photo-1633681926022-84c23e8cb2d6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwyfHxiZWF1dHklMjBzYWxvbiUyMGludGVyaW9yJTIwbW9kZXJuJTIwaGFpcmN1dCUyMHN0eWxpc3R8ZW58MHx8fHwxNzkxNjYzMTI4fDA&ixlib=rb-4.1.0&q=85",
+    "salon_counter": "https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwzfHxiZWF1dHklMjBzYWxvbiUyMGludGVyaW9yJTIwbW9kZXJuJTIwaGFpcmN1dCUyMHN0eWxpc3R8ZW58MHx8fHwxNzkxNjYzMTI4fDA&ixlib=rb-4.1.0&q=85",
+    "treatment_products": "https://images.unsplash.com/photo-1773565744218-d8d11de58362?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTN8MHwxfHNlYXJjaHwzfHxzcGElMjB3ZWxsbmVzcyUyMHRyZWF0bWVudCUyMGJlYXV0eSUyMGNvc21ldGljcyUyMHByb2R1Y3R8ZW58MHx8fHwxNzkxNjYzMTI4fDA&ixlib=rb-4.1.0&q=85",
+    "facial_care": "https://images.unsplash.com/photo-1775642548888-7183ff686cb6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTN8MHwxfHNlYXJjaHwyfHxzcGElMjB3ZWxsbmVzcyUyMHRyZWF0bWVudCUyMGJlYXV0eSUyMGNvc21ldGljcyUyMHByb2R1Y3R8ZW58MHx8fHwxNzkxNjYzMTI4fDA&ixlib=rb-4.1.0&q=85",
+    "hairstylist_action": "https://images.unsplash.com/photo-1580618672591-eb180b1a973f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njl8MHwxfHNlYXJjaHwxfHxoYWlyJTIwc3R5bGlzdCUyMHBvcnRyYWl0JTIwaGFpcmRyZXNzZXIlMjB3b3JraW5nfGVufDB8fHx8MTc5MTY2MzEzOHww&ixlib=rb-4.1.0&q=85"
+  },
+  "testing_and_accessibility": {
+    "data_testid_convention": "All interactive elements, buttons, tabs, links, inputs, metrics, tables, and modals MUST specify kebab-case data-testid attributes (e.g. data-testid=\"superadmin-tenant-row-1-toggle\", data-testid=\"booking-submit-button\", data-testid=\"whatsapp-sim-send-btn\").",
+    "aria_labels": "Ensure screen reader accessibility for calendar navigation, WhatsApp chat messages, and module toggle switches."
+  },
+  "instructions_to_main_agent": [
+    "Ensure UI is completely in Spanish (ES).",
+    "Support clear multi-tenant switching (Super Admin view vs Tenant Company view vs Branch view vs Public Booking Portal /b/slug).",
+    "Ensure the WhatsApp simulator feels like a realistic chat drawer with AI Sonnet 4.5 responses for automated booking and reminders.",
+    "Implement clear role-based access visual cues (Super Admin, Admin Empresa, Gerente Sucursal, Recepcionista, Estilista).",
+    "Add testid attributes to every actionable item."
+  ]
+}
