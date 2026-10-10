@@ -42,7 +42,7 @@ export default function Dashboard() {
       <div className="grid gap-6 lg:grid-cols-5">
         <Panel title="Ventas últimos 14 días" className="lg:col-span-3" testid="sales-chart">
           <div className="h-64">
-            <ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 1, height: 1 }}>
               <AreaChart data={d.series}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
                 <XAxis dataKey="date" fontSize={11} />

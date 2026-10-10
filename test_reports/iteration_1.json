@@ -1,0 +1,43 @@
+{
+  "summary": "First test iteration for Salon SaaS platform. Backend: 38 pytest cases covering auth (all 5 roles), dashboard, agenda/availability (incl. Sunday-closed for Zona 10), booking + status + reschedule + 409 conflict, CRM, loyalty, marketing, reports, audit, admin SaaS (metrics/companies/billing-run/export/payments/non-super-forbidden), signup (success + duplicate), public portal (salon/slots/book/my/cancel), waitlist, WhatsApp inbound simulator (incl. Claude bot reply ~2-3s), role restrictions (stylist-only, receptionist 403 on /services), and full suspension flow (status=suspended->portal 403 & WA suspension msg; status=suspended_partial->company writes 402; restored). All 38 pass. Frontend: Smoke-tested login flows for super_admin (→/admin, MRR cards visible), company_admin (→/app), stylist (→/app/agenda, sees only own column), agenda page loads with Nueva cita, public portal /b/bellavida renders, signup page renders.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/appointments POST (and public book)", "issue": "If the client sends a non-string 'time' (e.g. a dict by mistake) the engine crashes with 500 in alternatives() instead of 400. Add type/format validation on body['time'] (expect 'HH:MM') to return 400."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin dashboard (Panel SaaS)", "issues": ["Recharts prints repeated console warnings 'width(-1) and height(-1)' for ResponsiveContainer wrappers - add minWidth/minHeight or a fixed aspect to the chart containers."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Minor) Validate 'time' format in POST /api/appointments and /api/public/salon/{slug}/book (and reschedule) to return 400 instead of 500 when non-string/invalid.",
+    "(Minor) Fix Recharts ResponsiveContainer warnings on admin dashboard by giving the parent explicit min-height.",
+    "No critical fixes required; backend and primary flows all pass."
+  ],
+  "critical_code_review_comments": [
+    "engine.py:14 m() has no defensive check for non-string input - any upstream bug feeds a dict and causes 500 cascade; add isinstance guard or Pydantic validation at route level.",
+    "routes_ops.py:244 /appointments uses dict Body(...) without Pydantic model - no input validation layer; same for most other routes. Consider Pydantic models for type safety.",
+    "Several large modules (routes_ops.py 427 lines, engine.py 281) are approaching the 700-line split threshold - still OK but monitor as features grow.",
+    "Mongo _id is always excluded via project in find() (good); confirmed no _id leaks in responses sampled.",
+    "Dashboard uses MM/DD date in UI but ISO yyyy-mm-dd in API - consistent."
+  ],
+  "updated_files": [
+    "/app/backend/tests/__init__.py (new)",
+    "/app/backend/tests/backend_test.py (new)"
+  ],
+  "success_rate": {"backend": "100% (38/38)", "frontend": "100% of smoke flows (login x3 roles, dashboards, agenda, portal, signup)"},
+  "test_credentials": "Loaded from /app/memory/test_credentials.md (super admin + 4 bellavida demo users).",
+  "seed_data_creation": "Tests create ephemeral TEST_ prefixed records (companies via signup, clients, appointments, waitlist). All cleaned up after the run; bellavida demo restored to status=active with all 10 modules enabled.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "backend_test.py must run with -n 0 (serial) because TestSuspension mutates demo company state; the pytest.ini default -n 2 --dist loadscope causes races between TestSuspension and TestPublicPortal/TestAgenda/TestWhatsApp. Command: `cd /app/backend && python -m pytest tests/backend_test.py -n 0 --junitxml=/app/test_reports/pytest/pytest_results.xml`. If re-running, note that TEST_ companies and TEST_ clients/appointments/waitlist should be cleaned via the Mongo cleanup snippet in iteration_1 (see summary). Public URL used for all testing is REACT_APP_BACKEND_URL from frontend/.env.",
+  "rca of the issue": "No production bugs blocking features. Minor 500→400 defensive validation suggested for appointment booking time format (reproducible by POSTing {time: {...}} but UI always sends a string, so not user-facing)."
+}

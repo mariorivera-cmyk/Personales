@@ -16,6 +16,10 @@ def m(s):
     return int(h) * 60 + int(mi)
 
 
+def valid_hm(s):
+    return isinstance(s, str) and len(s) == 5 and s[2] == ":" and s.replace(":", "").isdigit()
+
+
 def fm(x):
     return f"{x // 60:02d}:{x % 60:02d}"
 
@@ -141,6 +145,8 @@ def deposit_for(company, svc, minutes, price):
 
 async def book(cid, *, branch_id, service_id, date, time, phone, name=None, stylist_id=None, addon_ids=None,
                rec_type=None, source="staff", email=None, referred_by=None):
+    if not valid_hm(time) or not isinstance(date, str):
+        raise BookingError("Formato de fecha/hora inválido (HH:MM)")
     company = await one("companies", {"id": cid})
     svc = await one("services", {"id": service_id, "company_id": cid})
     if not svc:
@@ -176,6 +182,8 @@ async def book(cid, *, branch_id, service_id, date, time, phone, name=None, styl
 
 
 async def reschedule(cid, appt_id, date, time, stylist_id=None):
+    if not valid_hm(time):
+        raise BookingError("Formato de hora inválido (HH:MM)")
     a = await one("appointments", {"id": appt_id, "company_id": cid})
     if not a:
         raise BookingError("Cita no encontrada")

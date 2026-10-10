@@ -29,7 +29,7 @@ export default function Reports() {
       </div>
       <Panel title={`Ventas por ${GROUPS[group].toLowerCase()}`} className="mb-6">
         <div className="h-64">
-          <ResponsiveContainer>
+          <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 1, height: 1 }}>
             <BarChart data={rows.slice(0, 12)}><CartesianGrid strokeDasharray="3 3" stroke="#eee" /><XAxis dataKey="name" fontSize={11} /><YAxis fontSize={11} /><Tooltip />
               <Bar dataKey="sales" name="Ventas" fill="#C2410C" radius={[6, 6, 0, 0]} /><Bar dataKey="margin" name="Margen" fill="#059669" radius={[6, 6, 0, 0]} /></BarChart>
           </ResponsiveContainer>

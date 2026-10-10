@@ -37,10 +37,10 @@ export default function AdminDashboard() {
       </div>
       <div className="grid gap-6 lg:grid-cols-3">
         <Panel title="Ingresos por mes" className="lg:col-span-2">
-          <div className="h-64"><ResponsiveContainer><BarChart data={m.by_month}><CartesianGrid strokeDasharray="3 3" stroke="#eee" /><XAxis dataKey="month" fontSize={11} /><YAxis fontSize={11} /><Tooltip /><Bar dataKey="value" name="Ingresos" fill="#C2410C" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>
+          <div className="h-64"><ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 1, height: 1 }}><BarChart data={m.by_month}><CartesianGrid strokeDasharray="3 3" stroke="#eee" /><XAxis dataKey="month" fontSize={11} /><YAxis fontSize={11} /><Tooltip /><Bar dataKey="value" name="Ingresos" fill="#C2410C" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>
         </Panel>
         <Panel title="Ingresos por plan">
-          <div className="h-64"><ResponsiveContainer><PieChart><Pie data={m.by_plan} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80}>{m.by_plan.map((_, i) => <Cell key={i} fill={C[i % C.length]} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div>
+          <div className="h-64"><ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 1, height: 1 }}><PieChart><Pie data={m.by_plan} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80}>{m.by_plan.map((_, i) => <Cell key={i} fill={C[i % C.length]} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div>
         </Panel>
         <Panel title="Ingresos por módulo">
           {m.by_module.length === 0 ? <p className="text-sm text-muted-foreground">Sin ingresos por módulos adicionales aún.</p> :
