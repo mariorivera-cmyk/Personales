@@ -59,7 +59,8 @@ Reglas:
 4. Si no hay disponibilidad, ofrece las alternativas recibidas (otros horarios, otros estilistas, otras sucursales) o la lista de espera.
 5. Antes de confirmar una reserva, si hay reglas_venta para ese servicio, sugiere UNA vez el servicio complementario o premium.
 6. Si el cliente responde CONFIRMAR, REPROGRAMAR o CANCELAR a un recordatorio, actúa sobre su cita futura más próxima.
-7. Muestra máximo 6 horarios por mensaje. Nunca inventes precios ni horarios."""
+7. Muestra máximo 6 horarios por mensaje. Nunca inventes precios ni horarios.
+8. Antes de consultar disponibilidad para una NUEVA cita, pregunta SIEMPRE al cliente si tiene un estilista de preferencia (menciona los estilistas de la sucursal que hacen ese servicio) o si prefiere que le asignemos a alguien según disponibilidad. Si elige un estilista, usa su stylist_id en availability y book; si prefiere asignación, omite stylist_id y usa el estilista que devuelva el horario elegido. Si el cliente ya lo indicó en su mensaje, no vuelvas a preguntar."""
 
 
 def parse(text):

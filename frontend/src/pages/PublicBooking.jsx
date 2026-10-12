@@ -56,8 +56,8 @@ export default function PublicBooking() {
   }, [slug]);
   useEffect(() => {
     if (!f.service_id || !f.branch_id || !f.date) return;
-    api.get(`/public/salon/${slug}/slots`, { params: { branch_id: f.branch_id, service_id: f.service_id, date: f.date, stylist_id: f.stylist_id || "" } }).then((r) => setData(r.data));
-  }, [slug, f.service_id, f.branch_id, f.date, f.stylist_id]);
+    api.get(`/public/salon/${slug}/slots`, { params: { branch_id: f.branch_id, service_id: f.service_id, date: f.date, stylist_id: f.pref === "choose" ? f.stylist_id || "" : "" } }).then((r) => setData(r.data));
+  }, [slug, f.service_id, f.branch_id, f.date, f.stylist_id, f.pref]);
   if (error) return <div className="grid min-h-screen place-items-center p-6 text-center" data-testid="portal-error"><div><div className="font-display text-3xl italic">Portal no disponible</div><p className="mt-2 text-muted-foreground">{error}</p></div></div>;
   if (!salon) return null;
   const cur = salon.currency;
@@ -114,19 +114,34 @@ export default function PublicBooking() {
             {f.service_id && <section className="fade-up">
               <h2 className="mb-4 font-heading text-xl font-bold">2. Sucursal, estilista y fecha</h2>
               <div className="grid gap-3 sm:grid-cols-3">
-                <div><Label>Sucursal</Label><select className="field" value={f.branch_id} onChange={(e) => setF({ ...f, branch_id: e.target.value, stylist_id: "", time: "" })} data-testid="portal-branch-select">{salon.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
-                <div><Label>Estilista</Label><select className="field" value={f.stylist_id || ""} onChange={(e) => setF({ ...f, stylist_id: e.target.value, time: "" })} data-testid="portal-stylist-select"><option value="">Cualquiera</option>{salon.stylists.filter((s) => s.branch_id === f.branch_id).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+                <div><Label>Sucursal</Label><select className="field" value={f.branch_id} onChange={(e) => setF({ ...f, branch_id: e.target.value, stylist_id: "", pref: "", time: "" })} data-testid="portal-branch-select">{salon.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
                 <div><Label>Fecha</Label><input type="date" min={todayStr()} className="field" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value, time: "" })} data-testid="portal-date-input" /></div>
               </div>
-              <div className="mt-4">
+              <div className="mt-4" data-testid="portal-stylist-choice">
+                <Label>¿Tiene un estilista de preferencia?</Label>
+                <div className="flex flex-wrap gap-2">
+                  {[["choose", "Sí, quiero elegir"], ["any", "Asígnenme según disponibilidad"]].map(([k, l]) => (
+                    <button key={k} type="button" onClick={() => setF({ ...f, pref: k, stylist_id: "", time: "" })} data-testid={`portal-pref-${k}`}
+                      className={`rounded-full border px-4 py-1.5 text-sm transition-colors ${f.pref === k ? "border-slate-900 bg-slate-900 text-white" : "bg-white hover:border-primary"}`}>{l}</button>
+                  ))}
+                </div>
+                {f.pref === "choose" && (
+                  <select className="field mt-3 max-w-xs" value={f.stylist_id || ""} onChange={(e) => setF({ ...f, stylist_id: e.target.value, time: "" })} data-testid="portal-stylist-select">
+                    <option value="">— Seleccione estilista —</option>
+                    {salon.stylists.filter((s) => s.branch_id === f.branch_id).map((s) => <option key={s.id} value={s.id}>{s.name}{s.specialties ? ` · ${s.specialties}` : ""}</option>)}
+                  </select>
+                )}
+              </div>
+              {(f.pref === "any" || (f.pref === "choose" && f.stylist_id)) && <div className="mt-4">
                 {times.length > 0 ? <div className="flex flex-wrap gap-2">{times.map((s) => (
-                  <button key={s.time} onClick={() => setF({ ...f, time: s.time, stylist_id: f.stylist_id || s.stylist_id })} data-testid={`portal-slot-${s.time}`}
+                  <button key={s.time} onClick={() => setF({ ...f, time: s.time, stylist_id: f.pref === "choose" ? f.stylist_id : s.stylist_id })} data-testid={`portal-slot-${s.time}`}
                     className={`rounded-full border px-4 py-1.5 text-sm transition-colors ${f.time === s.time ? "border-primary bg-primary text-white" : "bg-white hover:border-primary"}`}>{s.time}</button>
                 ))}</div> : data && <>
                   <Alternatives alts={data.alternatives} onPick={(s) => setF({ ...f, time: s.time, stylist_id: s.stylist_id, date: s.date || f.date, branch_id: s.branch_id || f.branch_id })} />
                   {salon.waitlist && <Button variant="outline" className="mt-3" onClick={waitlist} data-testid="portal-waitlist-btn">Unirme a la lista de espera</Button>}
                 </>}
-              </div>
+                {f.pref === "any" && f.time && <p className="mt-2 text-sm text-muted-foreground" data-testid="portal-assigned-stylist">Le atenderá: <b>{salon.stylists.find((s) => s.id === f.stylist_id)?.name}</b></p>}
+              </div>}
             </section>}
             {sugg.length > 0 && f.time && <section className="rounded-2xl border border-primary/30 bg-primary/5 p-5 fade-up" data-testid="portal-suggestions">
               <div className="mb-2 flex items-center gap-1 font-semibold text-primary"><Sparkles className="h-4 w-4" />Complemente su visita</div>
