@@ -52,16 +52,28 @@ export function CashClose() {
   );
 }
 
+function monthEnd(d) {
+  const x = new Date(Number(d.slice(0, 4)), Number(d.slice(5, 7)), 0);
+  return `${d.slice(0, 8)}${String(x.getDate()).padStart(2, "0")}`;
+}
+
+function periodRange(p, d) {
+  if (p === "weekly") return [addDays(d, -6), d];
+  if (p === "biweekly") return d.slice(8) > "15" ? [d.slice(0, 8) + "16", monthEnd(d)] : [d.slice(0, 8) + "01", d.slice(0, 8) + "15"];
+  return [d.slice(0, 8) + "01", monthEnd(d)];
+}
+
 export function Commissions() {
   const [start, setStart] = useState(todayStr().slice(0, 8) + "01");
-  const [end, setEnd] = useState(todayStr());
+  const [end, setEnd] = useState(monthEnd(todayStr()));
   const [rows, setRows] = useState(null);
   const [period, setPeriod] = useState("");
   useEffect(() => {
     api.get("/salon-rules").then((r) => {
-      const p = r.data.effective.pay_period, d = todayStr();
+      const p = r.data.effective.pay_period;
       setPeriod(r.data.schema.find((x) => x.key === "pay_period").options[p]);
-      setStart(p === "weekly" ? addDays(d, -6) : p === "biweekly" ? (d.slice(8) > "15" ? d.slice(0, 8) + "16" : d.slice(0, 8) + "01") : d.slice(0, 8) + "01");
+      const [s, e] = periodRange(p, todayStr());
+      setStart(s); setEnd(e);
     }).catch(() => {});
   }, []);
   useEffect(() => { api.get("/commissions", { params: { start, end } }).then((r) => setRows(r.data)).catch((e) => toast.error(errMsg(e))); }, [start, end]);
@@ -73,14 +85,15 @@ export function Commissions() {
         {period && <span className="rounded-full bg-secondary px-3 py-1.5 text-xs font-medium" data-testid="comm-period">Periodo de pago: {period}</span>}
         <div><Label>Desde</Label><input type="date" className="field" value={start} onChange={(e) => setStart(e.target.value)} data-testid="comm-start" /></div>
         <div><Label>Hasta</Label><input type="date" className="field" value={end} onChange={(e) => setEnd(e.target.value)} data-testid="comm-end" /></div>
-        <Button variant="ghost" onClick={() => { const d = todayStr(); setStart(d.slice(8) > "15" ? d.slice(0, 8) + "16" : d.slice(0, 8) + "01"); setEnd(d); }}>Quincena actual</Button>
+        <Button variant="ghost" onClick={() => { const [s, e] = periodRange("biweekly", todayStr()); setStart(s); setEnd(e); }} data-testid="comm-fortnight">Quincena actual</Button>
         <Button variant="ghost" onClick={() => { setStart(addDays(todayStr(), -30)); setEnd(todayStr()); }}>Últimos 30 días</Button>
       </div>
       {!rows ? <Loader /> : (
         <div className="overflow-x-auto rounded-2xl border bg-white">
           <table className="w-full text-sm" data-testid="commissions-table">
             <thead className="bg-secondary/60 text-left text-xs uppercase text-slate-500"><tr>{["Estilista", "Servicios", "Ventas", "Propinas", "Comisión", "Sueldo base", "Total a pagar"].map((h) => <th key={h} className="px-4 py-3">{h}</th>)}</tr></thead>
-            <tbody>{rows.map((x) => <tr key={x.stylist} className="border-t"><td className="px-4 py-3 font-medium">{x.stylist}</td><td className="px-4 py-3">{x.services}</td><td className="px-4 py-3">{money(x.sales)}</td><td className="px-4 py-3">{money(x.tips)}</td><td className="px-4 py-3">{money(x.commission)}</td><td className="px-4 py-3">{money(x.base_salary)}</td><td className="px-4 py-3 font-semibold">{money(x.total_pay)}</td></tr>)}</tbody>
+            <tbody>{rows.map((x) => <tr key={x.stylist} className="border-t"><td className="px-4 py-3 font-medium">{x.stylist}</td><td className="px-4 py-3">{x.services}</td><td className="px-4 py-3">{money(x.sales)}</td><td className="px-4 py-3">{money(x.tips)}</td><td className="px-4 py-3">{money(x.commission)}</td><td className="px-4 py-3">{money(x.base_salary)}</td><td className="px-4 py-3 font-semibold">{money(x.total_pay)}</td></tr>)}
+              {!rows.length && <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground" data-testid="commissions-empty">Sin cobros en este periodo ({start} a {end}).</td></tr>}</tbody>
           </table>
         </div>
       )}

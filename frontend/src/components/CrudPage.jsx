@@ -141,7 +141,7 @@ export function FormDialog({ open, onOpenChange, title, fields, initial, onSubmi
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
-    try { await onSubmit(form); onOpenChange(false); } catch (err) { toast.error(errMsg(err)); } finally { setBusy(false); }
+    try { await onSubmit(form); onOpenChange(false); } catch (err) { if (err.message !== "cancelled") toast.error(errMsg(err)); } finally { setBusy(false); }
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -163,16 +163,18 @@ export function FormDialog({ open, onOpenChange, title, fields, initial, onSubmi
   );
 }
 
-export default function CrudPage({ title, subtitle, endpoint, fields, columns, testid, rowActions, canWrite = true, defaults = {}, embedded, extraActions }) {
+export default function CrudPage({ title, subtitle, endpoint, fields, columns, testid, rowActions, canWrite = true, defaults = {}, embedded, extraActions, onSaved, beforeSave }) {
   const [rows, setRows] = useState(null);
   const [edit, setEdit] = useState(null);
   const load = useCallback(() => api.get(endpoint).then(({ data }) => setRows(data)).catch((e) => { setRows([]); toast.error(errMsg(e)); }), [endpoint]);
   useEffect(() => { load(); }, [load]);
   const save = async (form) => {
+    if (beforeSave && !beforeSave(form)) throw new Error("cancelled");
     if (form.id) await api.put(`${endpoint}/${form.id}`, form);
     else await api.post(endpoint, form);
     toast.success("Guardado");
     load();
+    onSaved && onSaved();
   };
   const del = async (row) => {
     if (!window.confirm("¿Eliminar este registro?")) return;

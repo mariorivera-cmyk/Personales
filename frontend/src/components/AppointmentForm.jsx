@@ -1,18 +1,18 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Sparkles } from "lucide-react";
-import { api, errMsg, money } from "@/lib/api";
+import { api, errMsg, money, todayStr } from "@/lib/api";
 import { Label } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 
-export function Alternatives({ alts, onPick }) {
+export function Alternatives({ alts, onPick, title = "Horario no disponible. Alternativas:" }) {
   if (!alts) return null;
   const chip = (s, label, k) => (
     <button key={k} type="button" onClick={() => onPick(s)} className="rounded-full border bg-white px-3 py-1 text-xs hover:border-primary" data-testid={`alt-${k}`}>{label}</button>
   );
   return (
     <div className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm" data-testid="alternatives-box">
-      <div className="font-semibold text-amber-900">Horario no disponible. Alternativas:</div>
+      {title && <div className="font-semibold text-amber-900" data-testid="alternatives-title">{title}</div>}
       {alts.same_day?.length > 0 && <div className="flex flex-wrap gap-1.5">{alts.same_day.map((s, i) => chip(s, `${s.time} · ${s.stylist_name}`, `same-${i}`))}</div>}
       {alts.other_stylists?.length > 0 && <div><div className="text-xs text-muted-foreground">Otros estilistas</div><div className="flex flex-wrap gap-1.5">{alts.other_stylists.map((s, i) => chip(s, `${s.stylist_name} ${s.time}`, `sty-${i}`))}</div></div>}
       {alts.other_branches?.length > 0 && <div><div className="text-xs text-muted-foreground">Otras sucursales</div><div className="flex flex-wrap gap-1.5">{alts.other_branches.map((s, i) => chip(s, `${s.branch_name} ${s.time}`, `br-${i}`))}</div></div>}
@@ -93,7 +93,7 @@ export function AppointmentForm({ defaultDate, onDone, client }) {
       {slots && (
         <div>
           <Label>Horarios disponibles</Label>
-          {uniqueTimes.length === 0 ? <Alternatives alts={slots.alternatives} onPick={(s) => setF({ ...f, time: s.time, stylist_id: s.stylist_id, date: s.date || f.date, branch_id: s.branch_id || f.branch_id })} /> : (
+          {uniqueTimes.length === 0 ? <Alternatives alts={slots.alternatives} title={f.date === todayStr() ? "Hoy ya no hay turnos, estos son los próximos:" : undefined} onPick={(s) => setF({ ...f, time: s.time, stylist_id: s.stylist_id, date: s.date || f.date, branch_id: s.branch_id || f.branch_id })} /> : (
             <div className="flex max-h-40 flex-wrap gap-1.5 overflow-auto">
               {uniqueTimes.map((s) => (
                 <button key={s.time + s.stylist_id} type="button" onClick={() => setF({ ...f, time: s.time, stylist_id: s.stylist_id })} data-testid={`slot-${s.time}-${s.stylist_id}`}

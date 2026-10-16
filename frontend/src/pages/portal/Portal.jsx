@@ -41,10 +41,12 @@ function Steps({ step }) {
 }
 
 function Success({ done, salon, slug, reset }) {
+  const pend = done.deposit_total > 0;
   return (
     <section className="rounded-3xl border bg-white p-8 text-center lg:col-span-2" data-testid="booking-success">
-      <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
-      <h2 className="mt-3 font-heading text-2xl font-bold">¡Reserva registrada!</h2>
+      {pend ? <Clock className="mx-auto h-12 w-12 text-amber-600" /> : <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />}
+      <h2 className="mt-3 font-heading text-2xl font-bold" data-testid="success-title">{pend ? "Reserva pendiente de anticipo" : "¡Reserva registrada!"}</h2>
+      {pend && <p className="mx-auto mt-2 max-w-md text-sm font-semibold text-amber-900" data-testid="success-deposit-deadline">Envíe {money(done.deposit_total, salon.currency)} dentro de {done.rules?.deposit_hours} horas para asegurar su cita; si no, se libera automáticamente.</p>}
       <ul className="mx-auto mt-4 max-w-md space-y-3 text-left text-sm">
         {done.appointments.map((a) => (
           <li key={a.id} className="rounded-xl border p-3" data-testid="success-line">
@@ -190,7 +192,7 @@ export default function Portal() {
                     ))}</div>
                   ) : <>
                     <p className="mb-2 text-sm font-medium" data-testid="no-slots-msg">{data.today ? "Hoy ya no hay turnos, estos son los próximos:" : "No hay horarios ese día. Estas son las alternativas:"}</p>
-                    <Alternatives alts={data.alternatives} onPick={(s) => { setF({ ...f, date: s.date || f.date, branch_id: s.branch_id || f.branch_id }); }} />
+                    <Alternatives alts={data.alternatives} title={null} onPick={(s) => { setF({ ...f, date: s.date || f.date, branch_id: s.branch_id || f.branch_id }); }} />
                     {salon.waitlist && <Button variant="outline" className="mt-3" onClick={waitlist} data-testid="portal-waitlist-btn">Unirme a la lista de espera</Button>}
                   </>}
                   {pick && <ul className="mt-3 space-y-1 text-sm text-slate-600" data-testid="portal-plan">{pick.plan.map((p) => <li key={p.service_id}>{p.time}–{p.end_time} · {p.service_name} con <b>{p.stylist_name}</b></li>)}</ul>}

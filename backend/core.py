@@ -35,7 +35,8 @@ def today():
 
 
 def norm_phone(p):
-    return "+" + re.sub(r"\D", "", p or "")
+    d = re.sub(r"\D", "", p or "")
+    return "+" + ("502" + d if len(d) == 8 else d)
 
 
 def enc(text):

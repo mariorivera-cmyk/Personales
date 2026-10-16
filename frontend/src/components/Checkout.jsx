@@ -65,17 +65,34 @@ export function CheckoutDialog({ appt, onClose, onDone }) {
   );
 }
 
-export function CancelDialog({ open, onClose, onConfirm, title = "¿Cancelar esta cita?" }) {
+function CancelPolicyInfo({ p, apply, setApply }) {
+  const late = p.cancel_enabled && p.hours_before < p.cancel_hours;
+  return (
+    <div className={`space-y-1.5 rounded-lg p-3 text-sm ${late && apply ? "bg-amber-50 text-amber-900" : "bg-secondary/60"}`} data-testid="cancel-policy-info">
+      {late ? <>
+        <div className="font-semibold" data-testid="cancel-late-flag">Cancelación tardía: faltan {Math.max(0, p.hours_before)} h (límite {p.cancel_hours} h).</div>
+        <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={apply} onChange={(e) => setApply(e.target.checked)} data-testid="cancel-apply-policy" />Aplicar la política (la clienta cancela tarde). Desmárquelo si cancela el salón.</label>
+        {apply && <div className="text-xs">{p.consequence}</div>}
+      </> : <div>{p.cancel_enabled ? "Dentro del plazo: sin penalización." : "Política de cancelación desactivada."}</div>}
+      {p.deposit_paid > 0 && <div className="text-xs font-medium" data-testid="cancel-refund-info">Anticipo recibido Q{p.deposit_paid.toFixed(2)} · reembolso: Q{(late && apply ? p.refund : p.deposit_paid).toFixed(2)}</div>}
+      <div className="text-xs text-muted-foreground">Se enviará un aviso de cancelación a la clienta por WhatsApp.</div>
+    </div>
+  );
+}
+
+export function CancelDialog({ open, onClose, onConfirm, title = "¿Cancelar esta cita?", preview }) {
   const [reason, setReason] = useState("");
+  const [apply, setApply] = useState(true);
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-sm" data-testid="cancel-dialog">
         <DialogHeader><DialogTitle className="font-heading">{title}</DialogTitle></DialogHeader>
         <p className="text-sm text-muted-foreground">El horario quedará libre y se avisará a la lista de espera.</p>
+        {preview && <CancelPolicyInfo p={preview} apply={apply} setApply={setApply} />}
         <div><Label>Motivo (opcional)</Label><input className="field" value={reason} onChange={(e) => setReason(e.target.value)} data-testid="cancel-reason-input" /></div>
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose} data-testid="cancel-dialog-back">Volver</Button>
-          <Button variant="destructive" onClick={() => { onConfirm(reason); setReason(""); }} data-testid="cancel-dialog-confirm">Sí, cancelar</Button>
+          <Button variant="destructive" onClick={() => { onConfirm(reason, apply); setReason(""); }} data-testid="cancel-dialog-confirm">Sí, cancelar</Button>
         </div>
       </DialogContent>
     </Dialog>

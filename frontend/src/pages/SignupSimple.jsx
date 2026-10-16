@@ -23,7 +23,7 @@ export default function SignupSimple() {
     if (slug && !slug.available) return toast.error("El enlace ya está en uso: elija una sugerencia");
     setBusy(true);
     try {
-      const r = await api.post("/signup", { ...f, slug: slug?.slug });
+      const r = await api.post("/signup", { ...f, slug: f.slug?.trim() || slug?.slug });
       await setToken(r.data.token);
       toast.success("¡Bienvenida! Su prueba gratuita de 14 días comenzó.");
       nav("/app");

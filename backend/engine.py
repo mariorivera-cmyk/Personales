@@ -289,11 +289,26 @@ async def stock_move(cid, pid, delta, reason, ref=""):
     if not p:
         return
     await db.products.update_one({"id": pid}, {"$inc": {"stock": delta}})
+    new, mn = float(p.get("stock") or 0) + delta, float(p.get("min_stock") or 0)
+    if delta < 0 and new <= mn < float(p.get("stock") or 0):
+        await notify_company(cid, "Existencia baja", f"{p['name']} ({new:g}/{mn:g})")
     await insert("inventory_moves", {"id": uid(), "company_id": cid, "product_id": pid, "product_name": p["name"], "qty": delta,
                                      "reason": reason, "ref": ref, "created_at": now_iso()})
 
 
-async def set_status(cid, appt_id, status, user=None, reason="", by_client=False):
+def cancel_preview(a, ru, apply=True):
+    hrs = hours_left(a)
+    late = apply and ru["cancel_enabled"] and hrs < float(ru["cancel_hours"])
+    paid = float(a.get("deposit_paid") or 0) if a.get("deposit_status") == "received" and ru["deposit_enabled"] else 0
+    pct = 0 if ru["deposit_refund"] == "none" else (100 if not late else float(ru["deposit_refund_pct"]) if ru["deposit_refund"] == "partial" else 0)
+    acts = {"record": "Se registra como cancelación tardía.", "notify": "Se registra y se avisa a la clienta por WhatsApp.",
+            "deposit": "Se registra, se avisa a la clienta y su próxima reserva pedirá anticipo."}
+    return {"late": bool(late), "hours_before": round(hrs, 1), "cancel_hours": ru["cancel_hours"], "cancel_enabled": ru["cancel_enabled"],
+            "consequence": acts[ru["late_cancel_action"]] if late else "Cancelación dentro del plazo: sin penalización.",
+            "deposit_paid": paid, "refund": round(paid * pct / 100, 2) if paid else 0}
+
+
+async def set_status(cid, appt_id, status, user=None, reason="", by_client=False, apply_policy=False):
     a = await one("appointments", {"id": appt_id, "company_id": cid})
     if not a:
         raise BookingError("Cita no encontrada")
@@ -302,22 +317,31 @@ async def set_status(cid, appt_id, status, user=None, reason="", by_client=False
     company = await one("companies", {"id": cid})
     ru = await appt_rules(a, company)
     upd = {"status": status, f"{status}_at": now_iso()}
+    if status == "completed" and a["status"] != "completed" and hours_left(a) > 0:
+        raise BookingError(f"La cita aún no empieza (inicia el {a['date'][8:]}/{a['date'][5:7]} a las {a['time']}). Podrá marcarla como atendida desde esa hora.")
     if status == "no_show" and a["status"] != "no_show" and hours_left(a) * 60 > -int(ru["late_tolerance_min"]):
         start = datetime.strptime(f"{a['date']} {a['time']}", "%Y-%m-%d %H:%M") + timedelta(minutes=int(ru["late_tolerance_min"]))
         raise BookingError(f"Aún no puede marcarse como falta: la tolerancia es de {ru['late_tolerance_min']} min (desde {start.strftime('%d/%m %H:%M')}).")
     if status == "cancelled":
         upd["cancel_reason"] = reason
-        late = by_client and ru["cancel_enabled"] and hours_left(a) < float(ru["cancel_hours"])
-        if late:
+        pv = cancel_preview(a, ru, by_client or apply_policy)
+        upd["cancel_type"] = "late" if pv["late"] else "on_time" if by_client or apply_policy else "salon"
+        upd["cancelled_by"] = "cliente" if by_client else "salon"
+        if pv["late"]:
             upd["late_cancel"] = True
-        if a.get("deposit_status") == "received" and ru["deposit_enabled"]:
-            paid = float(a.get("deposit_paid") or 0)
-            pct = 0 if ru["deposit_refund"] == "none" else (100 if not late else float(ru["deposit_refund_pct"]) if ru["deposit_refund"] == "partial" else 0)
-            upd["deposit_refund"] = round(paid * pct / 100, 2)
+        if pv["deposit_paid"]:
+            upd["deposit_refund"] = pv["refund"]
     log = {"status": status, "by": (user or {}).get("email") or ("cliente" if by_client else "sistema"), "at": now_iso(), "reason": reason}
     await db.appointments.update_one({"id": appt_id}, {"$set": upd, "$push": {"status_log": log}})
     if status == "cancelled":
         await notify_waitlist(cid, a)
+        if upd.get("late_cancel"):
+            await db.clients.update_one({"id": a["client_id"]}, {"$inc": {"late_cancels": 1}})
+        if not by_client:
+            ref = f" Le devolveremos Q{upd['deposit_refund']:.2f} de su anticipo." if upd.get("deposit_refund") else \
+                " Según nuestra política, el anticipo no es reembolsable." if "deposit_refund" in upd else ""
+            await wa_send(cid, a["client_phone"], f"Hola {a['client_name']}, su cita de {a['service_name']} del {a['date']} a las {a['time']} fue cancelada."
+                          f"{(' Motivo: ' + reason + '.') if reason else ''}{ref}", "cancellation")
         if upd.get("late_cancel") and ru["late_cancel_action"] in ("notify", "deposit"):
             extra_msg = " Para su próxima reserva se le pedirá un anticipo." if ru["late_cancel_action"] == "deposit" else ""
             await wa_send(cid, a["client_phone"], f"Su cita fue cancelada con menos de {ru['cancel_hours']:g} horas de anticipación. "

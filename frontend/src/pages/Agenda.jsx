@@ -10,6 +10,8 @@ import { AppointmentForm, Alternatives } from "@/components/AppointmentForm";
 import { CheckoutDialog, CancelDialog } from "@/components/Checkout";
 import { STATUS_CLS } from "@/lib/api";
 
+const nowGT = () => new Date(new Date().toLocaleString("en-US", { timeZone: "America/Guatemala" }));
+
 const PX = 1.5;
 const hm = (t) => `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
 
@@ -130,12 +132,15 @@ function ApptDialog({ appt, onClose, reload, canEdit }) {
   const [checkout, setCheckout] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [info, setInfo] = useState(null);
+  const [preview, setPreview] = useState(null);
   const { user } = useAuth();
+  const future = appt && new Date(`${appt.date}T${appt.time}:00`) > nowGT();
+  const openCancel = () => api.get(`/appointments/${appt.id}/cancel-preview`).then((r) => { setPreview(r.data); setCancelOpen(true); }).catch((e) => toast.error(errMsg(e)));
   useEffect(() => { if (appt) api.get("/clients/lookup", { params: { phone: appt.client_phone } }).then((r) => setInfo(r.data)).catch(() => setInfo(null)); }, [appt]);
   useEffect(() => { if (appt) { setRes({ date: appt.date, time: appt.time }); setAlts(null); } }, [appt]);
   if (!appt) return null;
-  const status = async (s, reason = "") => {
-    try { await api.post(`/appointments/${appt.id}/status`, { status: s, reason }); toast.success(`Cita: ${STATUS[s]}`); reload(); onClose(); } catch (e) { toast.error(errMsg(e)); }
+  const status = async (s, reason = "", apply = false) => {
+    try { const r = await api.post(`/appointments/${appt.id}/status`, { status: s, reason, apply_policy: apply }); toast.success(s === "cancelled" && r.data.late_cancel ? "Cita cancelada: registrada como cancelación tardía" : `Cita: ${STATUS[s]}`); reload(); onClose(); } catch (e) { toast.error(errMsg(e)); }
   };
   const deposit = async () => {
     try { await api.post(`/appointments/${appt.id}/deposit`, {}); toast.success("Anticipo recibido: cita confirmada"); reload(); onClose(); } catch (e) { toast.error(errMsg(e)); }
@@ -152,6 +157,7 @@ function ApptDialog({ appt, onClose, reload, canEdit }) {
           <div className="flex items-center gap-2"><StatusBadge status={appt.status} /><span className="text-muted-foreground">Origen: {appt.source}</span></div>
           <div><b>{appt.service_name}</b>{appt.addon_names?.length ? ` + ${appt.addon_names.join(", ")}` : ""}</div>
           <div>{appt.date} · {appt.time} – {appt.end_time} · {appt.stylist_name} · {appt.branch_name}</div>
+          {appt.status === "cancelled" && <div data-testid="appt-cancel-type" className={appt.late_cancel ? "font-semibold text-amber-800" : "text-muted-foreground"}>{appt.late_cancel ? "Cancelación tardía" : appt.cancel_type === "salon" ? "Cancelada por el salón" : "Cancelada a tiempo"}{appt.cancel_reason ? ` · ${appt.cancel_reason}` : ""}{appt.deposit_refund !== undefined ? ` · Reembolso Q${Number(appt.deposit_refund).toFixed(2)}` : ""}</div>}
           <div>Total {money(appt.price)} · Anticipo requerido {money(appt.deposit_required)} · Tel. {appt.client_phone}</div>
         </div>
         {canEdit && <>
@@ -161,9 +167,10 @@ function ApptDialog({ appt, onClose, reload, canEdit }) {
             {appt.deposit_status === "pending" && <Button size="sm" onClick={deposit} data-testid="appt-deposit-received">Anticipo recibido</Button>}
             {appt.status !== "completed" ? <>
               {appt.status === "pending" && <Button size="sm" variant="outline" onClick={() => status("confirmed")} data-testid="appt-status-confirmed">Confirmar</Button>}
-              <Button size="sm" onClick={() => setCheckout(true)} data-testid="appt-status-completed">Atendida</Button>
+              <Button size="sm" onClick={() => setCheckout(true)} disabled={future} title={future ? "La cita aún no empieza" : ""} data-testid="appt-status-completed">Atendida</Button>
               <Button size="sm" variant="outline" onClick={() => status("no_show")} data-testid="appt-status-no_show">No asistió</Button>
-              <Button size="sm" variant="destructive" onClick={() => setCancelOpen(true)} data-testid="appt-status-cancelled">Cancelar</Button>
+              <Button size="sm" variant="destructive" onClick={openCancel} data-testid="appt-status-cancelled">Cancelar</Button>
+              {future && <span className="w-full text-xs text-muted-foreground" data-testid="appt-future-hint">«Atendida» se habilita a la hora de inicio ({appt.time}).</span>}
             </> : user.role === "company_admin" ? <Button size="sm" variant="outline" onClick={() => status("confirmed", "Corrección de administrador")} data-testid="appt-reopen">Corregir (reabrir)</Button>
               : <span className="text-xs text-muted-foreground">Cita atendida: solo un administrador puede corregirla.</span>}
           </div>
@@ -175,7 +182,7 @@ function ApptDialog({ appt, onClose, reload, canEdit }) {
           {alts && <Alternatives alts={alts} onPick={(s) => setRes({ ...res, time: s.time, date: s.date || res.date, stylist_id: s.stylist_id })} />}
         </>}
         {checkout && <CheckoutDialog appt={appt} onClose={() => setCheckout(false)} onDone={() => { setCheckout(false); reload(); onClose(); }} />}
-        <CancelDialog open={cancelOpen} onClose={() => setCancelOpen(false)} onConfirm={(r) => { setCancelOpen(false); status("cancelled", r); }} />
+        <CancelDialog open={cancelOpen} preview={preview} onClose={() => setCancelOpen(false)} onConfirm={(r, apply) => { setCancelOpen(false); status("cancelled", r, apply); }} />
       </DialogContent>
     </Dialog>
   );

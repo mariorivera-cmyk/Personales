@@ -89,8 +89,11 @@ async def history(cid, user, change):
 async def new_company(body, plan, status="trial"):
     s = await psettings()
     slug = re.sub(r"[^a-z0-9-]", "", (body.get("slug") or body["company_name"]).lower().replace(" ", "-"))
+    if not slug:
+        raise HTTPException(400, "El enlace del portal solo puede tener letras, números y guiones")
     if await one("companies", {"slug": slug}):
-        raise HTTPException(400, "El enlace (slug) ya está en uso")
+        sug = [x for x in (f"{slug}-salon", f"{slug}-gt", f"{slug}-2") if not await one("companies", {"slug": x})]
+        raise HTTPException(400, f"El enlace «{slug}» ya está en uso. Pruebe: {', '.join(sug)}")
     if await one("users", {"email": body["email"].lower()}):
         raise HTTPException(400, "El correo ya está registrado")
     coupon = await one("platform_coupons", {"code": (body.get("coupon_code") or "").upper()}) if body.get("coupon_code") else None

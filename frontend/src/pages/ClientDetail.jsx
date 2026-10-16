@@ -49,7 +49,7 @@ export default function ClientDetail() {
         <Kpi label="Gasto acumulado" value={money(s.spent)} testid="client-spent" />
         <Kpi label="Frecuencia" value={s.frequency_days ? `${s.frequency_days} días` : "—"} testid="client-frequency" />
         <Kpi label="Citas futuras" value={s.future} testid="client-future" />
-        <Kpi label="Cancelaciones / No show" value={`${s.cancellations} / ${s.no_shows}`} testid="client-cancellations" />
+        <Kpi label="Cancelaciones / No show" value={`${s.cancellations} / ${s.no_shows}`} hint={s.late_cancels ? `${s.late_cancels} cancelación(es) tardía(s)` : undefined} testid="client-cancellations" />
       </div>
       {d.recommendations.length > 0 && (
         <div className="mb-6 flex items-start gap-2 rounded-2xl border border-primary/30 bg-primary/5 p-4 text-sm" data-testid="client-recommendations">

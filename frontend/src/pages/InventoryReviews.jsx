@@ -51,7 +51,8 @@ export function Inventory() {
           <ul className="max-h-72 space-y-1 overflow-auto text-sm">{d.moves.map((m) => <li key={m.id} className="flex justify-between"><span>{m.created_at.slice(0, 16).replace("T", " ")} · {m.product_name} · {m.reason}</span><b className={m.qty < 0 ? "text-rose-600" : "text-emerald-700"}>{m.qty > 0 ? "+" : ""}{m.qty}</b></li>)}</ul>
         </Panel>
       </div>
-      <CrudPage key={key} title="Productos" endpoint="/products" testid="products" defaults={{ stock: 0, min_stock: 2 }}
+      <CrudPage key={key} title="Productos" endpoint="/products" testid="products" defaults={{ stock: 0, min_stock: 2 }} onSaved={load}
+        beforeSave={(p) => !(Number(p.cost) > 0 && Number(p.price) < Number(p.cost)) || window.confirm(`El precio de venta (Q${Number(p.price || 0).toFixed(2)}) es menor al costo (Q${Number(p.cost).toFixed(2)}). ¿Desea guardar de todas formas?`)}
         fields={[{ key: "name", label: "Nombre" }, { key: "sku", label: "Código" }, { key: "cost", label: "Costo", type: "number" }, { key: "price", label: "Precio de venta", type: "number" },
           { key: "stock", label: "Existencia", type: "number" }, { key: "min_stock", label: "Mínimo", type: "number" }]}
         columns={[{ key: "name", label: "Producto" }, { key: "price", label: "Precio", render: (r) => money(r.price) }, { key: "cost", label: "Costo", render: (r) => money(r.cost) },

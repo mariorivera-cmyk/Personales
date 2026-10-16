@@ -89,7 +89,7 @@ async def checkout(oid: str, body: dict = Body(...), c=Depends(guard(ALL_STAFF))
             "discount": discount, "discount_reason": body.get("discount_reason", ""), "tip": tip, "deposit_applied": dep, "net": net,
             "payments": pays, "total": total, "commission": comm, "created_by": c["user"]["email"], "voided": False, "created_at": now_iso()}
     await insert("sales", sale)
-    await db.appointments.update_one({"id": oid}, {"$set": {"paid_net": net, "tip": tip, "commission": comm, "sale_id": sale["id"]}})
+    await db.appointments.update_one({"id": oid}, {"$set": {"paid_net": net, "tip": tip, "commission": comm, "sale_id": sale["id"], "paid_date": today()}})
     await audit(c["user"], c["cid"], "checkout", "appointment", f"{oid} total {total}" + (f" descuento {discount}: {body.get('discount_reason')}" if discount else ""))
     return sale
 
@@ -163,7 +163,9 @@ async def cash_close(date: str = "", branch_id: str = "", format: str = "", c=De
 async def commissions(start: str, end: str, format: str = "", c=Depends(guard(MANAGERS))):
     stylists = {s["id"]: s for s in await find("stylists", {"company_id": c["cid"]})}
     rows = {}
-    for a in await find("appointments", {"company_id": c["cid"], "status": "completed", "date": {"$gte": start, "$lte": end}}):
+    rng = {"$gte": start, "$lte": end}
+    for a in await find("appointments", {"company_id": c["cid"], "status": "completed",
+                                         "$or": [{"paid_date": rng}, {"paid_date": {"$exists": False}, "date": rng}]}):
         st = stylists.get(a["stylist_id"], {})
         x = rows.setdefault(a["stylist_id"], {"stylist": a["stylist_name"], "services": 0, "sales": 0, "tips": 0, "commission": 0,
                                               "base_salary": float(st.get("base_salary") or 0)})

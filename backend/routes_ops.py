@@ -166,6 +166,7 @@ async def client_detail(oid: str, c=Depends(guard(ALL_STAFF))):
     return {"client": client_out(cl), "appointments": appts, "files": files,
             "stats": {"visits": len(done), "spent": sum(a["price"] for a in done), "frequency_days": freq,
                       "cancellations": sum(1 for a in appts if a["status"] == "cancelled"),
+                      "late_cancels": sum(1 for a in appts if a.get("late_cancel")),
                       "no_shows": sum(1 for a in appts if a["status"] == "no_show"),
                       "future": sum(1 for a in appts if a["date"] >= today() and a["status"] in ("pending", "confirmed")),
                       "last_visit": done[0]["date"] if done else None},
@@ -267,11 +268,19 @@ async def appt_status(oid: str, body: dict = Body(...), c=Depends(guard(ALL_STAF
     if st not in ("pending", "confirmed", "in_progress", "completed", "cancelled", "no_show"):
         raise HTTPException(400, "Estado inválido")
     try:
-        a = await E.set_status(c["cid"], oid, st, c["user"], body.get("reason", ""))
+        a = await E.set_status(c["cid"], oid, st, c["user"], body.get("reason", ""), apply_policy=bool(body.get("apply_policy")))
     except E.BookingError as e:
         booking_error(e)
-    await audit(c["user"], c["cid"], "status", "appointment", f"{oid} -> {st}")
+    await audit(c["user"], c["cid"], "status", "appointment", f"{oid} -> {st}" + (f" ({a.get('cancel_type')})" if st == "cancelled" else ""))
     return a
+
+
+@r.get("/appointments/{oid}/cancel-preview")
+async def cancel_preview(oid: str, c=Depends(guard(ALL_STAFF))):
+    a = await one("appointments", {"id": oid, "company_id": c["cid"]})
+    if not a:
+        raise HTTPException(404, "Cita no encontrada")
+    return E.cancel_preview(a, await E.appt_rules(a, c["company"]))
 
 
 @r.post("/appointments/{oid}/reschedule")
