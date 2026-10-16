@@ -13,6 +13,7 @@ from routes_extra import r as extra_router
 from routes_saas import r as saas_router
 from routes_ops import r as ops_router
 from routes_wa import r as wa_router
+from rules import r as rules_router
 from seed import seed_all
 from engine import run_reminders, release_unpaid
 from billing import run_billing, trial_notices
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="SalonFlow SaaS API", description="API multiempresa para gestión de citas de salones de belleza",
               docs_url="/api/docs", openapi_url="/api/openapi.json")
-for router in (extra_router, saas_router, ops_router, wa_router):
+for router in (extra_router, saas_router, ops_router, wa_router, rules_router):
     app.include_router(router)
 
 

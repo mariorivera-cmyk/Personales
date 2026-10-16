@@ -86,7 +86,8 @@ export function AppointmentForm({ defaultDate, onDone, client }) {
       </div>
       {f.phone && !phoneOk && <p className="text-xs text-rose-600" data-testid="appt-phone-error">Teléfono inválido: use código de país y número, ej. +50255551234</p>}
       {info?.exists && <div className="rounded-xl border bg-secondary/50 p-3 text-sm" data-testid="client-found">Clienta existente: <b>{info.client.name}</b> · Faltas: {info.no_shows}
-        {info.alert && <div className="mt-1 font-semibold text-rose-700" data-testid="noshow-alert">Supera el límite de {info.max_no_shows} faltas: considere exigir anticipo.</div>}
+        {info.alert && <div className="mt-1 font-semibold text-rose-700" data-testid="noshow-alert">Alcanza el límite de {info.max_no_shows} faltas ({info.no_shows}). Regla del salón: {info.noshow_action}.</div>}
+        {info.deposit_next && <div className="mt-1 font-semibold text-amber-800" data-testid="deposit-next-alert">Canceló tarde: esta reserva requiere anticipo.</div>}
         {info.allergies && <div className="mt-1 font-semibold text-rose-700" data-testid="allergy-alert">Alergias: {info.allergies}</div>}</div>}
       {info && !info.exists && phoneOk && <p className="text-xs text-muted-foreground">Clienta nueva: se creará su ficha.</p>}
       {slots && (

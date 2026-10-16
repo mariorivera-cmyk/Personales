@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Body, HTTPException, UploadFile, File, R
 from core import (db, find, one, uid, now_iso, today, insert, audit, guard, wa_send, norm_phone, portal_url, notify_company,
                   MANAGERS, STAFF, ALL_STAFF)
 import engine as E
+import rules as R
 from routes_ops import crud
 
 r = APIRouter(prefix="/api")
@@ -42,15 +43,17 @@ def check_payments(pays, total):
 
 
 @r.get("/clients/lookup")
-async def client_lookup(phone: str, c=Depends(guard(ALL_STAFF))):
+async def client_lookup(phone: str, branch_id: str = "", c=Depends(guard(ALL_STAFF))):
     cl = await one("clients", {"company_id": c["cid"], "phone": norm_phone(phone)})
     if not cl:
         return {"exists": False}
     from core import dec
-    faults = await db.appointments.count_documents({"client_id": cl["id"], "status": "no_show"})
-    mx = int(c["company"].get("settings", {}).get("policy", {}).get("max_no_shows", 2))
+    ru = R.effective(c["company"], branch_id or None)
+    faults = await R.fault_count(cl["id"], ru)
+    mx = int(ru["noshow_limit"])
     return {"exists": True, "client": {"id": cl["id"], "name": cl["name"], "email": cl.get("email")}, "no_shows": faults,
-            "allergies": dec((cl.get("notes") or {}).get("allergies", "")), "alert": faults >= mx, "max_no_shows": mx}
+            "allergies": dec((cl.get("notes") or {}).get("allergies", "")), "alert": ru["noshow_enabled"] and faults >= mx, "max_no_shows": mx,
+            "noshow_action": R.DEFS["noshow_action"]["options"][ru["noshow_action"]], "deposit_next": bool(cl.get("deposit_next"))}
 
 
 @r.post("/appointments/{oid}/checkout")
@@ -68,9 +71,14 @@ async def checkout(oid: str, body: dict = Body(...), c=Depends(guard(ALL_STAFF))
     pays = check_payments(body.get("payments") or [], total)
     st = await one("stylists", {"id": a["stylist_id"]}) or {}
     svc = await one("services", {"id": a["service_id"]}) or {}
-    pct = float(svc["commission_pct"]) if svc.get("commission_pct") not in (None, "") else float(st.get("commission_pct") or 0)
+    ru = R.effective(c["company"], a["branch_id"])
+    set_ = lambda d, k: d.get(k) not in (None, "")
+    pct = float(svc["commission_pct"]) if set_(svc, "commission_pct") else float(st["commission_pct"]) if set_(st, "commission_pct") else float(ru["commission_percent"])
+    fixed = float(st["commission_fixed"]) if set_(st, "commission_fixed") and float(st["commission_fixed"]) else float(ru["commission_fixed"])
     net = round(a["price"] - discount, 2)
-    comm = round(net * pct / 100 + float(st.get("commission_fixed") or 0) + (tip * pct / 100 if st.get("tips_in_commission") else 0), 2)
+    tips_in = ru["tips_in_commission"] or bool(st.get("tips_in_commission"))
+    base = fixed if ru["commission_model"] == "fixed" else net * pct / 100
+    comm = round(base + (tip * pct / 100 if tips_in and ru["commission_model"] != "fixed" else 0), 2)
     try:
         await E.set_status(c["cid"], oid, "completed", c["user"])
     except E.BookingError as e:
@@ -108,7 +116,7 @@ async def void_sale(sid: str, body: dict = Body(default={}), c=Depends(guard(("c
     if s.get("appointment_id"):
         a = await one("appointments", {"id": s["appointment_id"]}) or {}
         if a and "loyalty" in c["company"].get("enabled_modules", []):
-            per = float(c["company"].get("settings", {}).get("loyalty", {}).get("points_per_100", 10))
+            per = float(R.effective(c["company"], a.get("branch_id"))["loyalty_points_per_100"])
             await db.clients.update_one({"id": a["client_id"]}, {"$inc": {"points": -int(a["price"] / 100 * per)}})
         for sv in await find("services", {"id": {"$in": [a.get("service_id")] + a.get("addon_ids", [])}}):
             for item in sv.get("consumes") or []:
@@ -197,6 +205,7 @@ async def onboarding(c=Depends(guard(STAFF))):
         {"key": "stylists", "label": "Registre estilistas y horarios", "to": "/app/estilistas", "done": await db.stylists.count_documents({"company_id": cid}) > 0},
         {"key": "salon", "label": "Complete datos del salón (descripción y dirección)", "to": "/app/config",
          "done": bool(co.get("description")) and bool(branches) and all(b.get("address") for b in branches)},
+        {"key": "rules", "label": "Revise las reglas del salón (cancelación, anticipo, faltas)", "to": "/app/config?tab=reglas", "done": bool(co.get("rules_reviewed"))},
         {"key": "share", "label": "Comparta su enlace de reservas", "to": None, "done": bool(ob.get("shared"))},
     ]
     return {"steps": steps, "dismissed": bool(ob.get("dismissed")), "portal_url": portal_url(co["slug"])}

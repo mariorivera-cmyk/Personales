@@ -369,12 +369,19 @@ async def reports(group: str = "branch", start: str = "", end: str = "", c=Depen
 @r.get("/loyalty")
 async def loyalty(c=Depends(guard(STAFF, "loyalty"))):
     top = await find("clients", {"company_id": c["cid"]}, [("points", -1)], 20)
-    return {"config": c["company"].get("settings", {}).get("loyalty", {}),
+    import rules as R
+    ru = R.effective(c["company"])
+    return {"config": {**c["company"].get("settings", {}).get("loyalty", {}), "points_per_100": ru["loyalty_points_per_100"],
+                       "redeem_value": ru["loyalty_redeem_value"]},
             "top": [{k: x.get(k) for k in ("id", "name", "phone", "points", "membership", "referred_by")} for x in top]}
 
 
 @r.put("/loyalty")
 async def put_loyalty(body: dict = Body(...), c=Depends(guard(("company_admin",), "loyalty"))):
+    import rules as R
+    vals = {k2: body.pop(k1) for k1, k2 in (("points_per_100", "loyalty_points_per_100"), ("redeem_value", "loyalty_redeem_value")) if k1 in body}
+    if vals:
+        await R.save_rules(c, vals)
     await db.companies.update_one({"id": c["cid"]}, {"$set": {"settings.loyalty": body}})
     return body
 
@@ -388,7 +395,8 @@ async def loyalty_points(body: dict = Body(...), c=Depends(guard(STAFF, "loyalty
             raise HTTPException(400, "Puntos insuficientes")
         pts = -pts
     await db.clients.update_one({"id": cl["id"]}, {"$inc": {"points": pts}})
-    value = round(abs(pts) * float(c["company"].get("settings", {}).get("loyalty", {}).get("redeem_value", 0.1)), 2) if pts < 0 else 0
+    import rules as R
+    value = round(abs(pts) * float(R.effective(c["company"])["loyalty_redeem_value"]), 2) if pts < 0 else 0
     await audit(c["user"], c["cid"], "points", "client", f"{cl['name']} {pts}")
     return {"points": cl.get("points", 0) + pts, "value": value}
 

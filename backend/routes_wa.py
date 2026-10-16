@@ -8,6 +8,7 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 from core import (db, find, one, uid, now_iso, today, local_now, insert, guard, wa_send, norm_phone, ALL_STAFF, valid_phone,
                   make_client_token, client_from_token, notify_company, audit)
 import engine as E
+import rules as R
 from routes_ops import waitlist_entry
 
 r = APIRouter(prefix="/api")
@@ -43,6 +44,7 @@ async def context_for(company, phone):
         "citas_futuras": [{"id": a["id"], "servicio": a["service_name"], "fecha": a["date"], "hora": a["time"], "estilista": a["stylist_name"],
                            "sucursal": a["branch_name"], "estado": a["status"]} for a in appts],
         "recomendaciones": [x["message"] for x in recs], "moneda": company.get("currency", "GTQ"),
+        "politicas_del_salon": R.public_rules(R.effective(company)),
     }
 
 
@@ -68,7 +70,7 @@ Reglas:
 4. Si no hay disponibilidad, ofrece las alternativas recibidas (otros horarios, otros estilistas, otras sucursales) o la lista de espera.
 5. Antes de confirmar una reserva, si hay reglas_venta para ese servicio, sugiere UNA vez el servicio complementario o premium.
 6. Si el cliente responde CONFIRMAR, REPROGRAMAR o CANCELAR a un recordatorio, actúa sobre su cita futura más próxima.
-7. Muestra máximo 6 horarios por mensaje. Nunca inventes precios ni horarios.
+7. Muestra máximo 6 horarios por mensaje. Nunca inventes precios, horarios ni políticas: usa solo politicas_del_salon (si cancel_enabled o deposit_enabled es false, no menciones esa política).
 8. Antes de consultar disponibilidad para una NUEVA cita, pregunta SIEMPRE al cliente si tiene un estilista de preferencia (menciona los estilistas de la sucursal que hacen ese servicio) o si prefiere que le asignemos a alguien según disponibilidad. Si elige un estilista, usa su stylist_id en availability y book; si prefiere asignación, omite stylist_id y usa el estilista que devuelva el horario elegido. Si el cliente ya lo indicó en su mensaje, no vuelvas a preguntar.
 9. Si el cliente tiene ultimo_estilista y ese estilista está en la sucursal y realiza el servicio solicitado, propónlo PRIMERO por su nombre (ej. "¿Desea agendar nuevamente con Carla, quien le atendió la última vez?") y ofrece como alternativa elegir otro estilista o la asignación según disponibilidad. Si no realiza ese servicio o no está en esa sucursal, aplica la regla 8 normalmente."""
 
@@ -87,10 +89,10 @@ async def execute(company, phone, action):
     mine = lambda aid: one("appointments", {"id": aid, "company_id": cid, "client_phone": phone})
     try:
         if t == "availability":
-            slots = await E.day_slots(cid, bid, p["service_id"], p["date"], p.get("stylist_id"))
+            slots = await E.day_slots(cid, bid, p["service_id"], p["date"], p.get("stylist_id"), public=True)
             if slots:
                 return {"disponible": True, "fecha": p["date"], "sucursal_id": bid, "horarios": slots[:12]}
-            return {"disponible": False, "alternativas": await E.alternatives(cid, bid, p["service_id"], p["date"], None, p.get("stylist_id"))}
+            return {"disponible": False, "alternativas": await E.alternatives(cid, bid, p["service_id"], p["date"], None, p.get("stylist_id"), True)}
         if t == "book":
             a = await E.book(cid, branch_id=bid, service_id=p["service_id"], date=p["date"], time=p["time"], phone=phone,
                              name=p.get("name"), stylist_id=p.get("stylist_id"), addon_ids=p.get("addon_ids"),
@@ -101,7 +103,7 @@ async def execute(company, phone, action):
             if not await mine(p.get("appointment_id")):
                 return {"ok": False, "error": "Cita no encontrada para este cliente"}
             if t == "reschedule":
-                a = await E.reschedule(cid, p["appointment_id"], p["date"], p["time"], p.get("stylist_id"))
+                a = await E.reschedule(cid, p["appointment_id"], p["date"], p["time"], p.get("stylist_id"), by_client=True)
             else:
                 a = await E.set_status(cid, p["appointment_id"], "cancelled" if t == "cancel" else "confirmed", by_client=True)
                 if t == "cancel":
@@ -221,7 +223,8 @@ async def public_salon(slug: str):
             "portal": s.get("portal", {}), "waitlist": "waitlist" in c.get("enabled_modules", []),
             "description": c.get("description", ""), "logo_url": c.get("logo_url"), "photo_urls": c.get("photo_urls") or [],
             "social": c.get("social") or {}, "show_team": c.get("show_team", True), "phone": c.get("phone"),
-            "policy": s.get("policy", {}), "deposit_rules": s.get("deposit_rules", []), "legal": s.get("legal", {}),
+            "rules": R.public_rules(R.effective(c)), "legal": s.get("legal", {}),
+            "branch_rules": {b["id"]: R.public_rules(R.effective(c, b["id"])) for b in await find("branches", {"company_id": cid})},
             "rating": round(sum(x["rating"] for x in revs) / len(revs), 1) if revs else None, "reviews_count": len(revs),
             "reviews": [{k: x.get(k) for k in ("client_name", "rating", "comment", "service_name", "created_at")} for x in revs[:6]],
             "gallery": [{k: g.get(k) for k in ("id", "url", "caption", "service_id")} for g in await find("gallery", {"company_id": cid})],
@@ -235,9 +238,9 @@ async def public_salon(slug: str):
 @r.get("/public/salon/{slug}/slots")
 async def public_slots(slug: str, branch_id: str, service_id: str, date: str, stylist_id: str = ""):
     c = await public_company(slug)
-    slots = await E.day_slots(c["id"], branch_id, service_id, date, stylist_id or None)
+    slots = await E.day_slots(c["id"], branch_id, service_id, date, stylist_id or None, public=True)
     sugg = await E.suggestions(c["id"], service_id) if "upsell" in c.get("enabled_modules", []) else []
-    alts = None if slots else await E.alternatives(c["id"], branch_id, service_id, date, None, stylist_id or None)
+    alts = None if slots else await E.alternatives(c["id"], branch_id, service_id, date, None, stylist_id or None, True)
     return {"slots": slots, "alternatives": alts, "suggestions": sugg}
 
 
@@ -253,8 +256,33 @@ async def public_book(slug: str, body: dict = Body(...)):
                          referred_by=body.get("referred_by"))
     except E.BookingError as e:
         raise HTTPException(409, {"message": e.msg, "alternatives": e.alternatives})
-    await wa_send(c["id"], a["client_phone"], f"¡Hola {a['client_name']}! Tu cita de {a['service_name']} está reservada para el {a['date']} a las {a['time']}. Responde CONFIRMAR para confirmarla.", "confirmation")
+    await wa_send(c["id"], a["client_phone"], f"¡Hola {a['client_name']}! Tu cita de {a['service_name']} está reservada para el {a['date']} a las {a['time']}."
+                  f"{policy_lines(a['rules'], a['deposit_required'])}\nResponde CONFIRMAR para confirmarla.", "confirmation")
     return a
+
+
+def policy_lines(ru, dep):
+    pr = R.public_rules(ru)
+    out = f"\n{pr['policy_text']}" if pr["cancel_enabled"] else ""
+    if dep and pr["deposit_enabled"]:
+        out += f"\nAnticipo requerido: Q{dep:.2f}, a enviar dentro de {ru['deposit_hours']:g} horas o la cita se libera. {pr['bank_text']} {pr['refund_text']}"
+    return out
+
+
+@r.post("/public/salon/{slug}/quote")
+async def public_quote(slug: str, body: dict = Body(...)):
+    c = await public_company(slug)
+    ru = R.effective(c, body.get("branch_id") or None)
+    cl = await one("clients", {"company_id": c["id"], "phone": norm_phone(body.get("phone"))}) if body.get("phone") else None
+    over = bool(cl) and ru["noshow_enabled"] and await R.fault_count(cl["id"], ru) >= int(ru["noshow_limit"])
+    blocked = over and ru["noshow_action"] == "block"
+    dep, flagged = 0, bool(cl and cl.get("deposit_next"))
+    for sid in body.get("service_ids") or []:
+        svc = await one("services", {"id": sid, "company_id": c["id"]})
+        if svc:
+            dep += R.deposit_amount(ru, svc, int(svc["duration"]), float(svc["price"]), over, flagged)
+            flagged = False
+    return {"rules": R.public_rules(ru), "deposit": round(dep, 2), "blocked": blocked}
 
 
 def otp_hash(code):
@@ -323,11 +351,11 @@ async def delete_request(slug: str, request: Request):
 async def public_slots_multi(slug: str, body: dict = Body(...)):
     c = await public_company(slug)
     lines = body.get("lines") or []
-    opts = await E.multi_slots(c["id"], body["branch_id"], body["date"], lines)
+    opts = await E.multi_slots(c["id"], body["branch_id"], body["date"], lines, public=True)
     sugg = await E.suggestions(c["id"], lines[0]["service_id"]) if lines and "upsell" in c.get("enabled_modules", []) else []
     alts = None
     if not opts and lines:
-        alts = await E.alternatives(c["id"], body["branch_id"], lines[0]["service_id"], body["date"], None, lines[0].get("stylist_id") or None)
+        alts = await E.alternatives(c["id"], body["branch_id"], lines[0]["service_id"], body["date"], None, lines[0].get("stylist_id") or None, True)
     return {"options": opts, "suggestions": sugg, "alternatives": alts, "today": body["date"] == today()}
 
 
@@ -347,10 +375,7 @@ async def public_book_multi(slug: str, body: dict = Body(...)):
     await db.clients.update_one({"id": appts[0]["client_id"]}, {"$set": {"data_consent": now_iso()}})
     lines = "\n".join(f"- {a['service_name']}{(' + ' + ', '.join(a['addon_names'])) if a['addon_names'] else ''}: {a['time']}-{a['end_time']} con {a['stylist_name']}" for a in appts)
     dep = sum(a["deposit_required"] for a in appts)
-    msg = f"¡Hola {appts[0]['client_name']}! Su reserva del {appts[0]['date']} en {appts[0]['branch_name']}:\n{lines}"
-    if dep:
-        bank = c.get("settings", {}).get("policy", {}).get("bank_info", "")
-        msg += f"\nAnticipo requerido: Q{dep:.2f}. {bank}"
+    msg = f"¡Hola {appts[0]['client_name']}! Su reserva del {appts[0]['date']} en {appts[0]['branch_name']}:\n{lines}" + policy_lines(appts[0]["rules"], dep)
     await wa_send(c["id"], appts[0]["client_phone"], msg + "\nResponda CONFIRMAR para confirmarla.", "confirmation")
     return {"appointments": appts, "deposit_total": dep}
 
@@ -414,7 +439,7 @@ async def public_manage(slug: str, aid: str, request: Request, body: dict = Body
             return res
         if body.get("action") == "confirm":
             return await E.set_status(c["id"], aid, "confirmed", by_client=True)
-        return await E.reschedule(c["id"], aid, body["date"], body["time"], body.get("stylist_id") or None)
+        return await E.reschedule(c["id"], aid, body["date"], body["time"], body.get("stylist_id") or None, by_client=True)
     except E.BookingError as e:
         raise HTTPException(409, {"message": e.msg, "alternatives": e.alternatives})
 

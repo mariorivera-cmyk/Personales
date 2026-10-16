@@ -1,11 +1,10 @@
 from datetime import datetime, timedelta
 from core import (db, find, one, uid, now_iso, local_now, today, wa_send, norm_phone, insert, valid_phone, portal_url, fill,
                   notify_company, email_send)
+import rules as R
 
 DEFAULT_REMINDER = ("Recordatorio: {nombre}, su cita de {servicio} es el {fecha} a las {hora} con {estilista} en {sucursal} "
                     "({direccion}). Responda CONFIRMAR, REPROGRAMAR o CANCELAR, o gestione su cita aquí: {enlace}")
-
-STEP = 30
 
 
 class BookingError(Exception):
@@ -38,8 +37,8 @@ def intervals(a):
     return [(a["occ_start"], a["occ_end"])]
 
 
-def ceil_step(x):
-    return ((x + STEP - 1) // STEP) * STEP
+def ceil_step(x, step):
+    return ((x + step - 1) // step) * step
 
 
 def overlap(a1, a2, b1, b2):
@@ -52,10 +51,17 @@ def blocked(b, a1, a2):
     return overlap(a1, a2, m(b["start_time"]), m(b["end_time"]))
 
 
-async def day_slots(cid, branch_id, service_id, date, stylist_id=None, exclude=None, extra=0, company=None):
+async def day_slots(cid, branch_id, service_id, date, stylist_id=None, exclude=None, extra=0, company=None, public=False):
     company = company or await one("companies", {"id": cid})
     if date in company.get("settings", {}).get("holidays", []) or date < today():
         return []
+    rules = R.effective(company, branch_id)
+    step = int(rules["slot_interval"])
+    earliest = None
+    if public:
+        if date > (local_now() + timedelta(days=int(rules["max_advance_days"]))).strftime("%Y-%m-%d"):
+            return []
+        earliest = local_now() + timedelta(hours=float(rules["min_advance_hours"]))
     branch = await one("branches", {"id": branch_id, "company_id": cid})
     svc = await one("services", {"id": service_id, "company_id": cid})
     if not branch or not svc:
@@ -74,7 +80,8 @@ async def day_slots(cid, branch_id, service_id, date, stylist_id=None, exclude=N
     appts = await find("appointments", {"company_id": cid, "date": date, "status": {"$nin": ["cancelled", "no_show"]}})
     appts = [a for a in appts if a["id"] != exclude]
     blocks = await find("blocks", {"company_id": cid, "start_date": {"$lte": date}, "end_date": {"$gte": date}})
-    prep, dur, cl = int(svc.get("prep_minutes") or 0), int(svc["duration"]) + extra, int(svc.get("cleanup_minutes") or 0)
+    prep, dur = int(svc.get("prep_minutes") or 0), int(svc["duration"]) + extra
+    cl = int(svc["cleanup_minutes"]) if svc.get("cleanup_minutes") not in (None, "") else int(rules["default_cleanup_min"])
     ps, pm = int(svc.get("pause_start") or 0), int(svc.get("pause_minutes") or 0)
     cap = int(branch.get("capacity") or 99)
     branch_appts = [a for a in appts if a["branch_id"] == branch_id]
@@ -91,10 +98,12 @@ async def day_slots(cid, branch_id, service_id, date, stylist_id=None, exclude=N
         mine = [a for a in appts if a["stylist_id"] == st["id"]]
         blks = [b for b in blocks if b.get("stylist_id") == st["id"] or
                 (not b.get("stylist_id") and (not b.get("branch_id") or b["branch_id"] == branch_id))]
-        t0 = ((o + prep + STEP - 1) // STEP) * STEP
-        for t in range(t0, c - dur - cl + 1, STEP):
+        t0 = ceil_step(o + prep, step)
+        for t in range(t0, c - dur - cl + 1, step):
             a1, a2 = t - prep, t + dur + cl
             if nowm is not None and t <= nowm:
+                continue
+            if earliest and datetime.strptime(date, "%Y-%m-%d") + timedelta(minutes=t) < earliest:
                 continue
             cand = [(a1, t + ps), (t + ps + pm, a2)] if pm else [(a1, a2)]
             if any(overlap(c1, c2, i1, i2) for x in mine for c1, c2 in cand for i1, i2 in intervals(x)):
@@ -108,9 +117,9 @@ async def day_slots(cid, branch_id, service_id, date, stylist_id=None, exclude=N
     return out
 
 
-async def alternatives(cid, branch_id, service_id, date, time=None, stylist_id=None):
+async def alternatives(cid, branch_id, service_id, date, time=None, stylist_id=None, public=False):
     res = {"same_day": [], "other_stylists": [], "other_branches": [], "next_days": []}
-    slots = await day_slots(cid, branch_id, service_id, date)
+    slots = await day_slots(cid, branch_id, service_id, date, public=public)
     mine = [s for s in slots if not stylist_id or s["stylist_id"] == stylist_id]
     if time:
         res["other_stylists"] = [s for s in slots if s["time"] == time and s["stylist_id"] != stylist_id][:5]
@@ -118,14 +127,14 @@ async def alternatives(cid, branch_id, service_id, date, time=None, stylist_id=N
     else:
         res["same_day"] = mine[:8]
     for b in await find("branches", {"company_id": cid, "id": {"$ne": branch_id}}):
-        bs = await day_slots(cid, b["id"], service_id, date)
+        bs = await day_slots(cid, b["id"], service_id, date, public=public)
         if time:
             bs = [s for s in bs if s["time"] == time] or bs[:2]
         res["other_branches"] += [{**s, "branch_id": b["id"], "branch_name": b["name"]} for s in bs[:3]]
     d = datetime.strptime(date, "%Y-%m-%d")
     for i in range(1, 10):
         nd = (d + timedelta(days=i)).strftime("%Y-%m-%d")
-        ns = await day_slots(cid, branch_id, service_id, nd, stylist_id)
+        ns = await day_slots(cid, branch_id, service_id, nd, stylist_id, public=public)
         if ns:
             res["next_days"].append({"date": nd, "slots": ns[:4]})
         if len(res["next_days"]) >= 3:
@@ -149,14 +158,20 @@ async def upsert_client(cid, phone, name=None, email=None, referred_by=None):
     return c
 
 
-def deposit_for(company, svc, minutes, price):
-    if float(svc.get("deposit") or 0) > 0:
-        return float(svc["deposit"])
-    pct = 0
-    for r in company.get("settings", {}).get("deposit_rules", []):
-        if minutes >= int(r.get("min_minutes", 0)):
-            pct = max(pct, float(r.get("percent", 0)))
-    return round(price * pct / 100, 2)
+async def client_guard(cid, client, rules, group_id=None):
+    faults = await R.fault_count(client["id"], rules) if rules["noshow_enabled"] else 0
+    over = rules["noshow_enabled"] and faults >= int(rules["noshow_limit"])
+    if over and rules["noshow_action"] == "block":
+        raise BookingError("No es posible reservar en línea. Comuníquese con el salón para agendar su cita.")
+    if group_id and await db.appointments.count_documents({"group_id": group_id}):
+        return over
+    active = await find("appointments", {"company_id": cid, "client_id": client["id"], "date": {"$gte": today()},
+                                         "status": {"$in": ["pending", "confirmed"]}})
+    visits = {a.get("group_id") or a["id"] for a in active}
+    if len(visits) >= int(rules["max_active_per_client"]):
+        raise BookingError(f"Ya tiene {len(visits)} citas activas; el máximo permitido es {rules['max_active_per_client']}. "
+                           "Cancele o espere a una de ellas para reservar otra.")
+    return over
 
 
 async def book(cid, *, branch_id, service_id, date, time, phone, name=None, stylist_id=None, addon_ids=None,
@@ -169,14 +184,20 @@ async def book(cid, *, branch_id, service_id, date, time, phone, name=None, styl
     svc = await one("services", {"id": service_id, "company_id": cid})
     if not svc:
         raise BookingError("Servicio no encontrado")
+    public = source != "staff"
+    rules = R.effective(company, branch_id)
     addons = await find("services", {"company_id": cid, "id": {"$in": addon_ids or []}})
     extra = sum(int(a["duration"]) for a in addons)
-    slots = await day_slots(cid, branch_id, service_id, date, stylist_id, extra=extra, company=company)
+    slots = await day_slots(cid, branch_id, service_id, date, stylist_id, extra=extra, company=company, public=public)
     match = [s for s in slots if s["time"] == time]
     if not match:
-        raise BookingError("Horario no disponible", await alternatives(cid, branch_id, service_id, date, time, stylist_id))
+        raise BookingError("Horario no disponible", await alternatives(cid, branch_id, service_id, date, time, stylist_id, public))
     st = match[0]
-    client = await upsert_client(cid, phone, name, email, referred_by)
+    existing = await one("clients", {"company_id": cid, "phone": norm_phone(phone)})
+    over = await client_guard(cid, existing, rules, group_id) if existing and public else False
+    if existing and not public and rules["noshow_enabled"]:
+        over = await R.fault_count(existing["id"], rules) >= int(rules["noshow_limit"])
+    client = existing or await upsert_client(cid, phone, name, email, referred_by)
     branch = await one("branches", {"id": branch_id})
     dur = int(svc["duration"]) + extra
     price = float(svc["price"]) + sum(float(a["price"]) for a in addons)
@@ -184,11 +205,7 @@ async def book(cid, *, branch_id, service_id, date, time, phone, name=None, styl
     since = (datetime.now() - timedelta(days=30)).isoformat()
     run = await db.campaign_runs.find_one({"company_id": cid, "client_ids": client["id"], "run_at": {"$gte": since}},
                                           sort=[("run_at", -1)])
-    pol = company.get("settings", {}).get("policy", {})
-    deposit = deposit_for(company, svc, dur, price)
-    faults = await db.appointments.count_documents({"client_id": client["id"], "status": "no_show"})
-    if pol.get("deposit_after_no_shows") and faults >= int(pol.get("max_no_shows", 2)):
-        deposit = max(deposit, round(price * 0.3, 2))
+    deposit = R.deposit_amount(rules, svc, dur, price, over, bool(client.get("deposit_next")))
     ps, pm = int(svc.get("pause_start") or 0), int(svc.get("pause_minutes") or 0)
     appt = {
         "id": uid(), "company_id": cid, "branch_id": branch_id, "branch_name": branch["name"],
@@ -199,35 +216,54 @@ async def book(cid, *, branch_id, service_id, date, time, phone, name=None, styl
         "occ_start": start - int(svc.get("prep_minutes") or 0), "occ_end": start + dur + int(svc.get("cleanup_minutes") or 0),
         "price": price, "deposit_required": deposit, "deposit_paid": 0,
         "deposit_status": "pending" if deposit > 0 else None,
-        "deposit_due": max(min(local_now() + timedelta(hours=float(pol.get("deposit_hours", 24))),
+        "deposit_due": max(min(local_now() + timedelta(hours=float(rules["deposit_hours"])),
                                datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M") - timedelta(hours=2)),
                            local_now() + timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M") if deposit > 0 else None,
         "pause": [start + ps, start + ps + pm] if pm else None, "group_id": group_id, "review_token": uid() + uid(),
         "status_log": [], "status": "confirmed" if source == "staff" and deposit <= 0 else "pending", "source": source,
         "rec_type": rec_type if addons else None, "campaign_id": run["campaign_id"] if run else None,
-        "reminders_sent": [], "created_at": now_iso()}
+        "reminders_sent": [], "rules": rules, "reschedule_count": 0, "created_at": now_iso()}
     await insert("appointments", appt)
+    if deposit > 0 and client.get("deposit_next"):
+        await db.clients.update_one({"id": client["id"]}, {"$unset": {"deposit_next": ""}})
     return appt
 
 
-async def reschedule(cid, appt_id, date, time, stylist_id=None):
+async def appt_rules(a, company=None):
+    if a.get("rules"):
+        return {**R.suggested(), **a["rules"]}
+    return R.effective(company or await one("companies", {"id": a["company_id"]}), a["branch_id"])
+
+
+def hours_left(a):
+    return (datetime.strptime(f"{a['date']} {a['time']}", "%Y-%m-%d %H:%M") - local_now()).total_seconds() / 3600
+
+
+async def reschedule(cid, appt_id, date, time, stylist_id=None, by_client=False):
     if not valid_hm(time):
         raise BookingError("Formato de hora inválido (HH:MM)")
     a = await one("appointments", {"id": appt_id, "company_id": cid})
     if not a:
         raise BookingError("Cita no encontrada")
+    if by_client:
+        ru = await appt_rules(a)
+        if hours_left(a) < float(ru["reschedule_hours"]):
+            raise BookingError(f"Solo puede reprogramar hasta {ru['reschedule_hours']:g} horas antes de su cita. Comuníquese con el salón.")
+        if int(a.get("reschedule_count") or 0) >= int(ru["max_reschedules"]):
+            raise BookingError(f"Esta cita ya se reprogramó el máximo de {ru['max_reschedules']} veces. Comuníquese con el salón.")
     svc = await one("services", {"id": a["service_id"]})
     extra = a["duration"] - int(svc["duration"])
-    slots = await day_slots(cid, a["branch_id"], a["service_id"], date, stylist_id, exclude=appt_id, extra=extra)
+    slots = await day_slots(cid, a["branch_id"], a["service_id"], date, stylist_id, exclude=appt_id, extra=extra, public=by_client)
     match = [s for s in slots if s["time"] == time]
     if not match:
-        raise BookingError("Horario no disponible", await alternatives(cid, a["branch_id"], a["service_id"], date, time, stylist_id))
+        raise BookingError("Horario no disponible", await alternatives(cid, a["branch_id"], a["service_id"], date, time, stylist_id, by_client))
     start = m(time)
     upd = {"date": date, "time": time, "end_time": fm(start + a["duration"]), "stylist_id": match[0]["stylist_id"],
            "stylist_name": match[0]["stylist_name"], "occ_start": start - int(svc.get("prep_minutes") or 0),
            "occ_end": start + a["duration"] + int(svc.get("cleanup_minutes") or 0), "reminders_sent": [],
            "pause": [start + int(svc.get("pause_start") or 0), start + int(svc.get("pause_start") or 0) + int(svc["pause_minutes"])] if svc.get("pause_minutes") else None,
-           "status": a["status"] if a.get("deposit_status") == "pending" else "confirmed"}
+           "status": a["status"] if a.get("deposit_status") == "pending" else "confirmed",
+           "reschedule_count": int(a.get("reschedule_count") or 0) + 1}
     await db.appointments.update_one({"id": appt_id}, {"$set": upd})
     await notify_waitlist(cid, a)
     return {**a, **upd}
@@ -260,23 +296,42 @@ async def set_status(cid, appt_id, status, user=None, reason="", by_client=False
     if a["status"] == "completed" and status != "completed" and (user or {}).get("role") not in ("company_admin", "super_admin"):
         raise BookingError("La cita ya fue atendida: solo un administrador puede corregirla")
     company = await one("companies", {"id": cid})
-    pol = company.get("settings", {}).get("policy", {})
+    ru = await appt_rules(a, company)
     upd = {"status": status, f"{status}_at": now_iso()}
+    if status == "no_show" and a["status"] != "no_show" and hours_left(a) * 60 > -int(ru["late_tolerance_min"]):
+        start = datetime.strptime(f"{a['date']} {a['time']}", "%Y-%m-%d %H:%M") + timedelta(minutes=int(ru["late_tolerance_min"]))
+        raise BookingError(f"Aún no puede marcarse como falta: la tolerancia es de {ru['late_tolerance_min']} min (desde {start.strftime('%d/%m %H:%M')}).")
     if status == "cancelled":
         upd["cancel_reason"] = reason
-        hrs = (datetime.strptime(f"{a['date']} {a['time']}", "%Y-%m-%d %H:%M") - local_now()).total_seconds() / 3600
-        if by_client and hrs < float(pol.get("cancel_hours", 24)):
+        late = by_client and ru["cancel_enabled"] and hours_left(a) < float(ru["cancel_hours"])
+        if late:
             upd["late_cancel"] = True
+        if a.get("deposit_status") == "received" and ru["deposit_enabled"]:
+            paid = float(a.get("deposit_paid") or 0)
+            pct = 0 if ru["deposit_refund"] == "none" else (100 if not late else float(ru["deposit_refund_pct"]) if ru["deposit_refund"] == "partial" else 0)
+            upd["deposit_refund"] = round(paid * pct / 100, 2)
     log = {"status": status, "by": (user or {}).get("email") or ("cliente" if by_client else "sistema"), "at": now_iso(), "reason": reason}
     await db.appointments.update_one({"id": appt_id}, {"$set": upd, "$push": {"status_log": log}})
     if status == "cancelled":
         await notify_waitlist(cid, a)
-        if upd.get("late_cancel"):
-            await wa_send(cid, a["client_phone"], f"Su cita fue cancelada con menos de {pol.get('cancel_hours', 24)} horas de anticipación. "
-                          "Según nuestra política se registra como cancelación tardía.", "policy")
+        if upd.get("late_cancel") and ru["late_cancel_action"] in ("notify", "deposit"):
+            extra_msg = " Para su próxima reserva se le pedirá un anticipo." if ru["late_cancel_action"] == "deposit" else ""
+            await wa_send(cid, a["client_phone"], f"Su cita fue cancelada con menos de {ru['cancel_hours']:g} horas de anticipación. "
+                          f"Según nuestra política se registra como cancelación tardía.{extra_msg}", "policy")
+        if upd.get("late_cancel") and ru["late_cancel_action"] == "deposit":
+            await db.clients.update_one({"id": a["client_id"]}, {"$set": {"deposit_next": True}})
+        if "deposit_refund" in upd:
+            await notify_company(cid, "Anticipo por devolver" if upd["deposit_refund"] else "Anticipo no reembolsable",
+                                 f"{a['client_name']} canceló {a['service_name']} ({a['date']} {a['time']}). Reembolso según política: Q{upd['deposit_refund']:.2f}.")
+    if status == "no_show" and a["status"] != "no_show" and ru["noshow_enabled"]:
+        live = R.effective(company, a["branch_id"])
+        faults = await R.fault_count(a["client_id"], live)
+        if faults >= int(live["noshow_limit"]):
+            act = R.DEFS["noshow_action"]["options"][live["noshow_action"]]
+            await notify_company(cid, "Límite de faltas superado", f"{a['client_name']} acumula {faults} falta(s) (límite {live['noshow_limit']}). Acción: {act}.")
     if status == "completed" and a["status"] != "completed":
         if "loyalty" in company.get("enabled_modules", []):
-            per = float(company.get("settings", {}).get("loyalty", {}).get("points_per_100", 10))
+            per = float(R.effective(company, a["branch_id"])["loyalty_points_per_100"])
             await db.clients.update_one({"id": a["client_id"]}, {"$inc": {"points": int(a["price"] / 100 * per)}})
         for s in await find("services", {"id": {"$in": [a["service_id"]] + a.get("addon_ids", [])}}):
             for item in s.get("consumes") or []:
@@ -296,11 +351,13 @@ async def release_unpaid():
         await notify_company(a["company_id"], "Cita liberada", f"{a['client_name']} no envió el anticipo ({a['date']} {a['time']}).")
 
 
-async def multi_slots(cid, branch_id, date, lines):
+async def multi_slots(cid, branch_id, date, lines, public=False):
     svcs = [await one("services", {"id": ln["service_id"], "company_id": cid}) for ln in lines]
     if not lines or not all(svcs):
         return []
-    pools = [await day_slots(cid, branch_id, ln["service_id"], date, ln.get("stylist_id") or None) for ln in lines]
+    company = await one("companies", {"id": cid})
+    step = int(R.effective(company, branch_id)["slot_interval"])
+    pools = [await day_slots(cid, branch_id, ln["service_id"], date, ln.get("stylist_id") or None, company=company, public=public) for ln in lines]
     out, seen = [], set()
     for first in pools[0]:
         if first["time"] in seen:
@@ -316,7 +373,7 @@ async def multi_slots(cid, branch_id, date, lines):
             end = start + int(s["duration"])
             plan.append({"service_id": s["id"], "service_name": s["name"], "stylist_id": pick["stylist_id"], "stylist_name": pick["stylist_name"],
                          "time": fm(start), "end_time": fm(end), "price": s["price"]})
-            prev, t = pick["stylist_id"], ceil_step(end)
+            prev, t = pick["stylist_id"], ceil_step(end, step)
         if ok:
             seen.add(first["time"])
             out.append({"time": first["time"], "end_time": plan[-1]["end_time"], "plan": plan, "total": sum(p["price"] for p in plan)})
@@ -382,7 +439,8 @@ async def run_reminders(cid=None):
         company = await one("companies", {"id": a["company_id"]})
         if not company or company["status"] == "suspended":
             continue
-        hours = company.get("settings", {}).get("reminder_hours", [48, 24, 2])
+        ru = await appt_rules(a, company)
+        hours = ru["reminder_hours"]
         hrs = (datetime.strptime(f"{a['date']} {a['time']}", "%Y-%m-%d %H:%M") - ln).total_seconds() / 3600
         pending = [h for h in hours if 0 < hrs <= h and h not in a.get("reminders_sent", [])]
         if not pending:
@@ -391,13 +449,18 @@ async def run_reminders(cid=None):
         br = await one("branches", {"id": a["branch_id"]}) or {}
         text = fill(company.get("settings", {}).get("reminder_template") or DEFAULT_REMINDER, nombre=a["client_name"],
                     servicio=a["service_name"], fecha=a["date"], hora=a["time"], estilista=a["stylist_name"], sucursal=a["branch_name"],
-                    direccion=br.get("address") or "", enlace=portal_url(company["slug"]), horas=min(pending))
-        if not cl.get("no_whatsapp"):
+                    direccion=br.get("address") or "", enlace=portal_url(company["slug"]), horas=min(pending),
+                    horas_cancelar=f"{ru['cancel_hours']:g}", horas_reprogramar=f"{ru['reschedule_hours']:g}")
+        if ru["cancel_enabled"] and not company.get("settings", {}).get("reminder_template"):
+            text += f" Recuerde: puede cancelar sin costo hasta {ru['cancel_hours']:g} horas antes."
+        ok = {"whatsapp": not cl.get("no_whatsapp"), "email": bool(cl.get("email"))}
+        ch = next((x for x in (ru["reminder_channel"], ru["reminder_fallback"]) if ok.get(x)), None)
+        if ch == "whatsapp":
             await wa_send(a["company_id"], a["client_phone"], text, "reminder")
-        elif cl.get("email"):
+        elif ch == "email":
             await email_send(a["company_id"], cl["email"], "Recordatorio de cita", text)
         else:
-            await notify_company(a["company_id"], "Recordatorio no entregado", f"{a['client_name']} no tiene WhatsApp ni correo registrado.")
+            await notify_company(a["company_id"], "Recordatorio no entregado", f"{a['client_name']} no tiene un canal de recordatorio disponible.")
         await db.appointments.update_one({"id": a["id"]}, {"$addToSet": {"reminders_sent": {"$each": pending}}})
         sent += 1
     return sent

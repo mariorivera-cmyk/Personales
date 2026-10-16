@@ -56,12 +56,21 @@ export function Commissions() {
   const [start, setStart] = useState(todayStr().slice(0, 8) + "01");
   const [end, setEnd] = useState(todayStr());
   const [rows, setRows] = useState(null);
+  const [period, setPeriod] = useState("");
+  useEffect(() => {
+    api.get("/salon-rules").then((r) => {
+      const p = r.data.effective.pay_period, d = todayStr();
+      setPeriod(r.data.schema.find((x) => x.key === "pay_period").options[p]);
+      setStart(p === "weekly" ? addDays(d, -6) : p === "biweekly" ? (d.slice(8) > "15" ? d.slice(0, 8) + "16" : d.slice(0, 8) + "01") : d.slice(0, 8) + "01");
+    }).catch(() => {});
+  }, []);
   useEffect(() => { api.get("/commissions", { params: { start, end } }).then((r) => setRows(r.data)).catch((e) => toast.error(errMsg(e))); }, [start, end]);
   return (
     <div data-testid="commissions-page">
       <PageHeader title="Comisiones" subtitle="Calculadas al registrar cada cobro; los cambios de porcentaje no alteran cobros anteriores"
         action={<Button variant="outline" onClick={() => download(`/commissions?start=${start}&end=${end}&format=xlsx`, `comisiones_${start}_${end}.xlsx`)} data-testid="commissions-export"><Download className="mr-1 h-4 w-4" />Excel</Button>} />
       <div className="mb-5 flex flex-wrap items-end gap-3">
+        {period && <span className="rounded-full bg-secondary px-3 py-1.5 text-xs font-medium" data-testid="comm-period">Periodo de pago: {period}</span>}
         <div><Label>Desde</Label><input type="date" className="field" value={start} onChange={(e) => setStart(e.target.value)} data-testid="comm-start" /></div>
         <div><Label>Hasta</Label><input type="date" className="field" value={end} onChange={(e) => setEnd(e.target.value)} data-testid="comm-end" /></div>
         <Button variant="ghost" onClick={() => { const d = todayStr(); setStart(d.slice(8) > "15" ? d.slice(0, 8) + "16" : d.slice(0, 8) + "01"); setEnd(d); }}>Quincena actual</Button>

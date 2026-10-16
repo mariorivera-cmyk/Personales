@@ -17,10 +17,17 @@ const gcal = (a, salon) => {
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`${a.service_name} - ${salon.name}`)}&dates=${f(a.date, a.time)}/${f(a.date, a.end_time)}&ctz=America/Guatemala&location=${encodeURIComponent(br.address || br.name || "")}&details=${encodeURIComponent(`Con ${a.stylist_name}. Tel. ${br.phone || salon.phone || ""}`)}`;
 };
 
-function depositOf(svc, salon) {
-  if (Number(svc.deposit) > 0) return Number(svc.deposit);
-  const pct = Math.max(0, ...(salon.deposit_rules || []).filter((r) => svc.duration >= Number(r.min_minutes || 0)).map((r) => Number(r.percent || 0)));
-  return Math.round(svc.price * pct) / 100;
+function PolicyBox({ quote, cur }) {
+  const ru = quote?.rules;
+  if (!ru) return null;
+  return (
+    <div className="space-y-1 rounded-xl bg-secondary/60 p-3 text-xs" data-testid="portal-policy">
+      {ru.cancel_enabled && <div data-testid="portal-cancel-policy">{ru.policy_text}</div>}
+      {quote.blocked && <div className="font-medium text-rose-700" data-testid="portal-blocked">No es posible reservar en línea con este número. Comuníquese con el salón.</div>}
+      {ru.deposit_enabled && quote.deposit > 0 && <div className="font-medium text-amber-900" data-testid="portal-deposit-info">Esta reserva requiere un anticipo de {money(quote.deposit, cur)}, a enviar dentro de {ru.deposit_hours} horas o la cita se libera. {ru.bank_text} {ru.refund_text}</div>}
+      {!ru.cancel_enabled && !(ru.deposit_enabled && quote.deposit > 0) && <div>Reserva sin anticipo.</div>}
+    </div>
+  );
 }
 
 function Steps({ step }) {
@@ -47,7 +54,7 @@ function Success({ done, salon, slug, reset }) {
           </li>
         ))}
       </ul>
-      {done.deposit_total > 0 && <p className="mx-auto mt-4 max-w-md rounded-xl bg-amber-50 p-3 text-sm" data-testid="success-deposit">Anticipo pendiente: <b>{money(done.deposit_total, salon.currency)}</b>. {salon.policy?.bank_info} Si no lo recibimos en {salon.policy?.deposit_hours || 24} horas, la cita se libera.</p>}
+      {done.deposit_total > 0 && <p className="mx-auto mt-4 max-w-md rounded-xl bg-amber-50 p-3 text-sm" data-testid="success-deposit">Anticipo pendiente: <b>{money(done.deposit_total, salon.currency)}</b>. {done.rules?.bank_text} Si no lo recibimos en {done.rules?.deposit_hours} horas, la cita se libera.</p>}
       <p className="mt-3 text-sm text-muted-foreground">Le enviamos la confirmación por WhatsApp.</p>
       <Button className="mt-6 rounded-full" onClick={reset}>Reservar otra cita</Button>
     </section>
@@ -65,6 +72,7 @@ export default function Portal() {
   const [done, setDone] = useState(null);
   const [fav, setFav] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [quote, setQuote] = useState(null);
   useEffect(() => {
     api.get(`/public/salon/${slug}`).then((r) => { setSalon(r.data); document.title = `${r.data.name} · Reservas`; setF((x) => ({ ...x, branch_id: r.data.branches[0]?.id })); }).catch((e) => setError(errMsg(e)));
   }, [slug]);
@@ -81,6 +89,11 @@ export default function Portal() {
     const t = setTimeout(() => api.post(`/public/salon/${slug}/last-stylist`, { phone, service_id: lines[0]?.service_id }).then((r) => setFav(r.data)).catch(() => setFav(null)), 400);
     return () => clearTimeout(t);
   }, [phone, linesKey]); // eslint-disable-line
+  useEffect(() => {
+    if (!f.branch_id) return;
+    const t = setTimeout(() => api.post(`/public/salon/${slug}/quote`, { branch_id: f.branch_id, service_ids: lines.map((l) => l.service_id), phone: phoneOk ? phone : "" }).then((r) => setQuote(r.data)).catch(() => {}), 300);
+    return () => clearTimeout(t);
+  }, [slug, f.branch_id, linesKey, phone, phoneOk]); // eslint-disable-line
   if (error) return <div className="grid min-h-screen place-items-center p-6 text-center" data-testid="portal-error"><div><div className="font-display text-3xl italic">Portal no disponible</div><p className="mt-2 text-muted-foreground">{error}</p></div></div>;
   if (!salon) return <Loader />;
   const cur = salon.currency;
@@ -89,13 +102,12 @@ export default function Portal() {
   const sugg = data?.suggestions || [];
   const addons = sugg.filter((s) => f.addon_ids.includes(s.service.id));
   const total = (pick?.total || lines.reduce((a, l) => a + svcOf(l.service_id).price, 0)) + addons.reduce((a, s) => a + s.service.price, 0);
-  const deposit = lines.reduce((a, l) => a + depositOf(svcOf(l.service_id), salon), 0);
   const step = !lines.length ? 1 : !pick ? 2 : 3;
   const repeat = (a) => { setLines([{ service_id: a.service_id, stylist_id: a.stylist_id }]); setF({ ...f, branch_id: a.branch_id }); document.getElementById("reservar")?.scrollIntoView({ behavior: "smooth" }); };
   const book = async () => {
     if (!phoneOk) return toast.error("Teléfono inválido: escriba solo el número, sin código de país");
     setBusy(true);
-    try { const r = await api.post(`/public/salon/${slug}/book-multi`, { ...f, phone, plan: pick.plan }); setDone(r.data); } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
+    try { const r = await api.post(`/public/salon/${slug}/book-multi`, { ...f, phone, plan: pick.plan }); setDone({ ...r.data, rules: quote?.rules }); } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
   };
   const waitlist = async () => {
     if (!phoneOk || !f.name) return toast.error("Ingrese nombre y teléfono en Sus datos");
@@ -212,10 +224,7 @@ export default function Portal() {
                 {pick && <div className="text-muted-foreground">{f.date} · {pick.time}–{pick.end_time}</div>}
                 <div className="text-lg font-bold" data-testid="portal-total">{money(total, cur)}</div>
               </div>
-              <div className="rounded-xl bg-secondary/60 p-3 text-xs" data-testid="portal-policy">
-                Cancelación gratuita hasta {salon.policy?.cancel_hours || 24} horas antes.
-                {deposit > 0 && <div className="mt-1 font-medium text-amber-900" data-testid="portal-deposit-info">Esta reserva requiere un anticipo de {money(deposit, cur)}. {salon.policy?.bank_info || "El salón le enviará los datos para transferir."} Debe enviarse dentro de {salon.policy?.deposit_hours || 24} horas o la cita se libera.</div>}
-              </div>
+              <PolicyBox quote={quote} cur={cur} />
               <Button className="w-full rounded-full" disabled={busy || !pick || !f.name || !phoneOk} onClick={book} data-testid="portal-book-btn">{busy ? "Reservando..." : "Confirmar reserva"}</Button>
               <p className="text-center text-xs text-muted-foreground">Al confirmar acepta los <a href="#terminos" onClick={(e) => { e.preventDefault(); document.querySelector("[data-testid=footer-terms]")?.click(); }} className="underline" data-testid="portal-terms-link">términos y la política de privacidad</a>.</p>
             </aside>

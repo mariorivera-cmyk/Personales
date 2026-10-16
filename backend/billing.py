@@ -4,10 +4,9 @@ from datetime import datetime, timedelta
 from core import db, find, one, uid, now_iso, today, insert, email_send
 
 DEFAULT_SETTINGS = {
-    "holidays": [], "deposit_rules": [{"min_minutes": 120, "percent": 30}], "reminder_hours": [48, 24, 2],
-    "loyalty": {"points_per_100": 10, "redeem_value": 0.1, "referral_points": 50, "memberships": []},
+    "holidays": [],
+    "loyalty": {"referral_points": 50, "memberships": []},
     "portal": {"tagline": "Reserva tu cita en segundos", "hero": ""},
-    "policy": {"cancel_hours": 24, "deposit_hours": 24, "max_no_shows": 2, "deposit_after_no_shows": False, "bank_info": ""},
 }
 
 
