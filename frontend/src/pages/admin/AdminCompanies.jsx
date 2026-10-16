@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Plus, LogIn, Eye } from "lucide-react";
 import { api, errMsg, money } from "@/lib/api";
 import { CompanyStatusPanel, DeleteCompany } from "@/pages/admin/CompanyStatus";
+import { AccountStatement, PaymentButton } from "@/pages/admin/Accounting";
 import { useAuth } from "@/context/Auth";
 import { PageHeader, CompanyBadge, Label } from "@/components/Common";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { InvoiceTable } from "@/pages/Billing";
 function Detail({ id, plans, modules, onClose, reload }) {
   const [d, setD] = useState(null);
   const [f, setF] = useState({});
+  const [rk, setRk] = useState(0);
   const load = useCallback(() => api.get(`/admin/companies/${id}/statement`).then((r) => { setD(r.data); setF(r.data.company); }), [id]);
   useEffect(() => { load(); }, [load]);
   if (!d) return null;
@@ -47,6 +49,10 @@ function Detail({ id, plans, modules, onClose, reload }) {
         <div className="col-span-3 text-xs">Costo mensual: {money(d.monthly_total, cur)} · Ciclo: {money(d.cycle_total, cur)} · WhatsApp: {d.whatsapp.used} msgs</div>
       </div>
       <div><h4 className="mb-2 font-semibold">Facturas</h4><InvoiceTable invoices={d.invoices} cur={cur} /></div>
+      <div>
+        <div className="mb-2 flex items-center justify-between"><h4 className="font-semibold">Estado de cuenta</h4><PaymentButton companyId={id} onDone={() => { load(); reload(); setRk((k) => k + 1); }} /></div>
+        <AccountStatement base={`/admin/companies/${id}/account-statement`} cur={cur} slug={d.company.slug} reloadKey={rk} />
+      </div>
       <div><h4 className="mb-2 font-semibold">Historial de plan y módulos</h4>
         <ul className="space-y-1">{d.history.map((h) => <li key={h.id} className="text-xs"><span className="text-muted-foreground">{h.created_at.slice(0, 16).replace("T", " ")} · {h.user_email}</span> — {h.change}</li>)}</ul></div>
       <DeleteCompany company={d.company} onDeleted={() => { onClose(); reload(); }} />

@@ -221,3 +221,77 @@ def invoice_pdf(inv):
     p.showPage()
     p.save()
     return buf.getvalue()
+
+
+METHODS = {"card": "Tarjeta", "transfer": "Transferencia", "deposit": "Depósito bancario", "cash": "Efectivo", "check": "Cheque", "other": "Otro"}
+
+
+async def account_statement(company, start, end):
+    cid = company["id"]
+    invs = [i for i in await find("invoices", {"company_id": cid}) if i["status"] != "void"]
+    pays = await find("payments", {"company_id": cid, "status": "approved"})
+    moves = [{"date": i["date"], "type": "cargo", "doc": i["number"], "desc": (i.get("items") or [{}])[0].get("desc", "Factura") +
+              (f" (+{len(i['items']) - 1})" if len(i.get("items") or []) > 1 else ""), "charge": i["total"], "payment": 0, "at": i["created_at"]} for i in invs]
+    moves += [{"date": p["date"], "type": "abono", "doc": p.get("invoice_number") or "A cuenta",
+               "desc": f"Pago {METHODS.get(p['method'], p['method'])}" + (f" · Ref. {p['reference']}" if p.get("reference") else "") + (" · manual" if p.get("manual") else ""),
+               "charge": 0, "payment": p["amount"], "at": p["created_at"]} for p in pays]
+    moves.sort(key=lambda m: (m["date"], m["at"]))
+    opening = round(sum(m["charge"] - m["payment"] for m in moves if m["date"] < start), 2) + 0.0
+    bal, rows = opening, []
+    for m in moves:
+        if start <= m["date"] <= end:
+            bal = round(bal + m["charge"] - m["payment"], 2) + 0.0
+            rows.append({**m, "balance": bal})
+    pending = [{"id": i["id"], "number": i["number"], "date": i["date"], "total": i["total"]} for i in invs if i["status"] == "pending"]
+    return {"company": {k: company.get(k) for k in ("id", "name", "nit", "currency", "status", "contact_email")}, "start": start, "end": end,
+            "opening": opening, "charges": round(sum(r["charge"] for r in rows), 2), "payments": round(sum(r["payment"] for r in rows), 2),
+            "closing": bal, "rows": rows, "pending_invoices": pending, "generated_at": now_iso()}
+
+
+def account_statement_pdf(st):
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+    buf = io.BytesIO()
+    p = canvas.Canvas(buf, pagesize=letter)
+    cur = st["company"].get("currency") or "GTQ"
+
+    def header():
+        p.setFont("Helvetica-Bold", 16)
+        p.drawString(50, 740, "Estado de cuenta")
+        p.setFont("Helvetica", 10)
+        p.drawString(50, 722, f"{st['company']['name']}  ·  NIT {st['company'].get('nit') or 'CF'}")
+        p.drawString(50, 708, f"Periodo: {st['start']} a {st['end']}   ·   Moneda: {cur}")
+        p.setFont("Helvetica-Bold", 9)
+        for x, t in ((50, "Fecha"), (110, "Documento"), (190, "Concepto")):
+            p.drawString(x, 684, t)
+        for x, t in ((430, "Cargo"), (490, "Abono"), (560, "Saldo")):
+            p.drawRightString(x, 684, t)
+        p.setFont("Helvetica", 9)
+    header()
+    y = 666
+    p.drawString(190, y, "Saldo anterior")
+    p.drawRightString(560, y, f"{st['opening']:,.2f}")
+    for r in st["rows"]:
+        y -= 15
+        if y < 90:
+            p.showPage()
+            header()
+            y = 666
+        p.drawString(50, y, r["date"])
+        p.drawString(110, y, r["doc"][:14])
+        p.drawString(190, y, r["desc"][:46])
+        p.drawRightString(430, y, f"{r['charge']:,.2f}" if r["charge"] else "")
+        p.drawRightString(490, y, f"{r['payment']:,.2f}" if r["payment"] else "")
+        p.drawRightString(560, y, f"{r['balance']:,.2f}")
+    y -= 28
+    p.setFont("Helvetica-Bold", 10)
+    for label, val in (("Total cargos", st["charges"]), ("Total abonos", st["payments"]), ("Saldo al cierre", st["closing"])):
+        p.drawString(380, y, label)
+        p.drawRightString(560, y, f"{cur} {val:,.2f}")
+        y -= 15
+    p.setFont("Helvetica", 8)
+    p.drawString(50, 50, f"Generado {st['generated_at'][:16].replace('T', ' ')} UTC · SalonFlow")
+    p.showPage()
+    p.save()
+    return buf.getvalue()
+

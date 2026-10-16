@@ -7,6 +7,7 @@ import { PageHeader, Panel, Kpi, CompanyBadge, Label } from "@/components/Common
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { CardForm } from "@/pages/Signup";
+import { AccountStatement } from "@/pages/admin/Accounting";
 
 export function InvoiceTable({ invoices, onPay, onTransfer, cur }) {
   return (
@@ -136,6 +137,7 @@ export default function Billing() {
           <ul className="max-h-40 space-y-1 overflow-auto text-xs text-muted-foreground">{d.notifications.map((n) => <li key={n.id}><b>{n.title}:</b> {n.text}</li>)}</ul>
         </Panel>
       </div>
+      <Panel title="Estado de cuenta" className="mt-6" testid="billing-account-statement"><AccountStatement base="/billing/account-statement" cur={cur} slug={d.company.slug} /></Panel>
       <Panel title="Historial de cambios" className="mt-6">
         <ul className="space-y-1 text-sm">{d.history.map((h) => <li key={h.id}><span className="text-xs text-muted-foreground">{h.created_at.slice(0, 16).replace("T", " ")} · {h.user_email}</span> — {h.change}</li>)}</ul>
       </Panel>

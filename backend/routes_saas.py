@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Body, HTTPException, Response, Request
 from core import db, find, one, uid, now_iso, today, insert, clean, audit, hash_pw, check_pw, make_token, get_user, super_admin, guard, ctx
 from billing import (DEFAULT_SETTINGS, psettings, breakdown, monthly_value, create_invoice, charge, mark_paid, prorate_module,
-                     run_billing, statement, invoice_pdf, cycle_items)
+                     run_billing, statement, invoice_pdf, cycle_items, METHODS, account_statement, account_statement_pdf)
 
 r = APIRouter(prefix="/api")
 BLOCKED = {"paused": "La cuenta de su empresa está en pausa. Comuníquese con soporte de SalonFlow.",
@@ -312,6 +312,90 @@ async def billing_run(u=Depends(super_admin)):
 @r.get("/admin/payments")
 async def admin_payments(u=Depends(super_admin)):
     return await find("payments", {}, [("created_at", -1)], 500)
+
+
+@r.post("/admin/payments/manual")
+async def manual_payment(body: dict = Body(...), u=Depends(super_admin)):
+    c = await one("companies", {"id": body.get("company_id")})
+    if not c:
+        raise HTTPException(400, "Seleccione la empresa")
+    try:
+        amount = round(float(body.get("amount")), 2)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Escriba un monto válido")
+    if amount <= 0:
+        raise HTTPException(400, "El monto debe ser mayor a 0")
+    method = body.get("method") or "transfer"
+    if method not in METHODS:
+        raise HTTPException(400, "Método de pago inválido")
+    date = body.get("date") or today()
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date) or date > today():
+        raise HTTPException(400, "La fecha no puede ser futura")
+    inv = None
+    if body.get("invoice_id"):
+        inv = await one("invoices", {"id": body["invoice_id"], "company_id": c["id"]})
+        if not inv or inv["status"] != "pending":
+            raise HTTPException(400, "La factura no está pendiente")
+    p = await insert("payments", {"id": uid(), "company_id": c["id"], "company_name": c["name"], "invoice_id": inv["id"] if inv else None,
+                                  "invoice_number": inv["number"] if inv else "", "amount": amount, "currency": c.get("currency", "GTQ"),
+                                  "method": method, "status": "approved", "reference": (body.get("reference") or "").strip(),
+                                  "note": (body.get("note") or "").strip(), "manual": True, "decided_by": u["email"], "date": date, "created_at": now_iso()})
+    if inv:
+        paid = sum(x["amount"] for x in await find("payments", {"invoice_id": inv["id"], "status": "approved"}))
+        if paid + 0.005 >= inv["total"]:
+            await mark_paid(c, inv)
+    await history(c["id"], u, f"Pago manual {METHODS[method]} {c.get('currency', 'GTQ')} {amount:,.2f}" + (f" a {inv['number']}" if inv else " (a cuenta)"))
+    await audit(u, c["id"], "manual_payment", "payment", f"{p['id']} {amount}")
+    return p
+
+
+@r.post("/admin/payments/{pid}/void")
+async def void_payment(pid: str, body: dict = Body(default={}), u=Depends(super_admin)):
+    p = await one("payments", {"id": pid})
+    if not p or not p.get("manual") or p["status"] != "approved":
+        raise HTTPException(400, "Solo se pueden anular pagos manuales aprobados")
+    reason = (body.get("reason") or "").strip()
+    if not reason:
+        raise HTTPException(400, "Escriba el motivo de la anulación")
+    await db.payments.update_one({"id": pid}, {"$set": {"status": "void", "void_reason": reason, "voided_by": u["email"], "voided_at": now_iso()}})
+    if p.get("invoice_id"):
+        inv = await one("invoices", {"id": p["invoice_id"]})
+        paid = sum(x["amount"] for x in await find("payments", {"invoice_id": p["invoice_id"], "status": "approved"}))
+        if inv and inv["status"] == "paid" and paid + 0.005 < inv["total"]:
+            await db.invoices.update_one({"id": inv["id"]}, {"$set": {"status": "pending"}, "$unset": {"paid_at": ""}})
+    await history(p["company_id"], u, f"Pago anulado {p.get('currency', 'GTQ')} {p['amount']:,.2f}: {reason}")
+    await audit(u, p["company_id"], "void_payment", "payment", f"{pid} {reason}")
+    return {"ok": True}
+
+
+async def statement_response(c, start, end, format):
+    end = end or today()
+    start = start or end[:8] + "01"
+    if start > end:
+        raise HTTPException(400, "La fecha inicial debe ser anterior a la final")
+    st = await account_statement(c, start, end)
+    name = f"estado_cuenta_{c['slug']}_{start}_{end}"
+    if format == "pdf":
+        return Response(account_statement_pdf(st), media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename={name}.pdf"})
+    if format == "xlsx":
+        from routes_extra import xlsx
+        rows = [[st["start"], "", "Saldo anterior", "", "", st["opening"]]] + [[r["date"], r["doc"], r["desc"], r["charge"] or "", r["payment"] or "", r["balance"]] for r in st["rows"]]
+        rows.append(["", "", "Saldo al cierre", st["charges"], st["payments"], st["closing"]])
+        return xlsx(["Fecha", "Documento", "Concepto", "Cargo", "Abono", "Saldo"], rows, name)
+    return st
+
+
+@r.get("/admin/companies/{cid}/account-statement")
+async def admin_account_statement(cid: str, start: str = "", end: str = "", format: str = "json", u=Depends(super_admin)):
+    c = await one("companies", {"id": cid})
+    if not c:
+        raise HTTPException(404, "Empresa no encontrada")
+    return await statement_response(c, start, end, format)
+
+
+@r.get("/billing/account-statement")
+async def my_account_statement(start: str = "", end: str = "", format: str = "json", c=Depends(guard(("company_admin",)))):
+    return await statement_response(c["company"], start, end, format)
 
 
 @r.post("/admin/payments/{pid}/decision")
