@@ -19,7 +19,7 @@ export function Inventory() {
   if (!d) return null;
   const total = sale.items.reduce((a, it) => a + (d.products.find((p) => p.id === it.product_id)?.price || 0) * Number(it.qty || 0), 0);
   const sell = async () => {
-    try { await api.post("/products/sale", { ...sale, payments: rows }); toast.success("Venta registrada en caja"); setSale({ items: [{ product_id: "", qty: 1 }], branch_id: sale.branch_id }); setKey(key + 1); } catch (e) { toast.error(errMsg(e)); }
+    try { await api.post("/products/sale", { ...sale, payments: rows }); toast.success("Venta registrada en caja"); setSale({ items: [{ product_id: "", qty: 1 }], branch_id: sale.branch_id }); setRows([{ method: "cash", amount: 0 }]); setKey(key + 1); } catch (e) { toast.error(errMsg(e)); }
   };
   const adjust = async (p) => {
     const qty = window.prompt(`Ajuste de ${p.name} (use negativo para restar)`);

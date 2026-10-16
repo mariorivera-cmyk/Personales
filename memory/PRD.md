@@ -44,6 +44,11 @@ Super Administrador, Administrador de Empresa, Gerente de Sucursal, Recepcionist
 - Aplicadas en: horarios (intervalo, limpieza, anticipación mín/máx solo en línea), anticipo (condiciones, % o fijo, plazo, datos bancarios, reembolso), faltas (periodo, límite, alerta/anticipo/bloqueo, tolerancia), máx citas activas, comisiones (modelo, %, propinas, periodo), puntos, recordatorios (horas, canal, alternativa), portal (/quote), confirmaciones y asistente WhatsApp.
 - Pestaña Configuración › Reglas del salón; paso en guía de arranque. Probado: iteration_3 (24 tests backend + UI).
 
+## Implemented D1–D10 (2026-10-16) — detalles_segunda_prueba
+- D1 teléfonos de 8 dígitos se normalizan a +502 (OTP aparece en simulador). D2 no se puede marcar Atendida/cobrar antes de la hora de inicio. D3 cancelación desde panel: vista previa (tardía, consecuencia, reembolso), casilla "aplicar política", tipo de cancelación guardado, aviso WhatsApp a la clienta, contador de tardías en ficha; no se puede re-cancelar.
+- D4 texto "Hoy ya no hay turnos". D5 título "Reserva pendiente de anticipo" + plazo. D6 comisiones por fecha de cobro y rango del periodo completo + mensaje vacío. D7 aviso "Existencia baja: Nombre (x/min)". D8 enlace del registro respetado / sugerencias. D9 producto nuevo aparece en venta sin recargar. D10 advertencia precio < costo.
+- Probado: iteration_4.
+
 ## Backlog
 - P0: Conectar WhatsApp Cloud API real (token + phone number id por empresa); pasarela Recurrente; FEL con INFILE/Digifact.
 - P1: Cobro de anticipos a clientes finales (sección 7); emails reales (Resend); subdominio por empresa; object storage para archivos.

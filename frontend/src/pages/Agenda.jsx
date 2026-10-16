@@ -160,7 +160,7 @@ function ApptDialog({ appt, onClose, reload, canEdit }) {
           {appt.status === "cancelled" && <div data-testid="appt-cancel-type" className={appt.late_cancel ? "font-semibold text-amber-800" : "text-muted-foreground"}>{appt.late_cancel ? "Cancelación tardía" : appt.cancel_type === "salon" ? "Cancelada por el salón" : "Cancelada a tiempo"}{appt.cancel_reason ? ` · ${appt.cancel_reason}` : ""}{appt.deposit_refund !== undefined ? ` · Reembolso Q${Number(appt.deposit_refund).toFixed(2)}` : ""}</div>}
           <div>Total {money(appt.price)} · Anticipo requerido {money(appt.deposit_required)} · Tel. {appt.client_phone}</div>
         </div>
-        {canEdit && <>
+        {canEdit && appt.status !== "cancelled" && <>
           {info?.allergies && <div className="rounded-lg bg-rose-50 p-2 text-sm font-semibold text-rose-700" data-testid="appt-allergy-alert">Alergias: {info.allergies}</div>}
           {info?.alert && <div className="rounded-lg bg-amber-50 p-2 text-sm text-amber-900">Esta clienta tiene {info.no_shows} faltas registradas.</div>}
           <div className="flex flex-wrap gap-2">

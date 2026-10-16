@@ -314,6 +314,8 @@ async def set_status(cid, appt_id, status, user=None, reason="", by_client=False
         raise BookingError("Cita no encontrada")
     if a["status"] == "completed" and status != "completed" and (user or {}).get("role") not in ("company_admin", "super_admin"):
         raise BookingError("La cita ya fue atendida: solo un administrador puede corregirla")
+    if a["status"] == "cancelled":
+        raise BookingError("La cita ya está cancelada; cree una nueva reserva si la clienta desea volver")
     company = await one("companies", {"id": cid})
     ru = await appt_rules(a, company)
     upd = {"status": status, f"{status}_at": now_iso()}

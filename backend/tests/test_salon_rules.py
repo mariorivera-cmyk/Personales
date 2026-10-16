@@ -85,7 +85,7 @@ def cleanup(H):
     for p in CREATED["phones"]:
         mdb.otp_codes.delete_many({"phone": p}); mdb.otp_locks.delete_many({"phone": p})
         mdb.clients.delete_many({"company_id": CID, "phone": p}); mdb.wa_messages.delete_many({"phone": p})
-    mdb.notifications.delete_many({"company_id": CID, "body": {"$regex": "TEST_"}})
+    mdb.notifications.delete_many({"company_id": CID, "text": {"$regex": "TEST_"}})
     for cid in CREATED["companies"]:
         for col in ("users", "services", "branches", "stylists", "invoices", "payments", "notifications", "company_history", "audit_logs"):
             mdb[col].delete_many({"company_id": cid})
@@ -328,6 +328,8 @@ class TestMisc:
     def test_checkout_commission_rule(self, H):
         put(H, {"commission_percent": 40})
         a = staff_book(H, ph(), next_weekday_at_least(8))
+        # D2: future appts can't be checked out -> shift to the past
+        mdb.appointments.update_one({"id": a["id"]}, {"$set": {"date": day(-1)}})
         r = requests.post(f"{API}/appointments/{a['id']}/checkout", json={"tip": 10, "payments": [{"method": "cash", "amount": 160}]}, headers=H["admin"])
         assert r.status_code == 200, r.text
         assert mdb.appointments.find_one({"id": a["id"]})["commission"] == 60.0  # 150*40%, tips excluded

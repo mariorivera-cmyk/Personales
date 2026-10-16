@@ -109,7 +109,7 @@ export default function Portal() {
   const book = async () => {
     if (!phoneOk) return toast.error("Teléfono inválido: escriba solo el número, sin código de país");
     setBusy(true);
-    try { const r = await api.post(`/public/salon/${slug}/book-multi`, { ...f, phone, plan: pick.plan }); setDone({ ...r.data, rules: quote?.rules }); } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
+    try { const r = await api.post(`/public/salon/${slug}/book-multi`, { ...f, phone, plan: pick.plan }); setDone({ ...r.data, rules: quote?.rules }); setTimeout(() => document.querySelector("[data-testid=booking-success]")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100); } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
   };
   const waitlist = async () => {
     if (!phoneOk || !f.name) return toast.error("Ingrese nombre y teléfono en Sus datos");

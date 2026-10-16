@@ -1,0 +1,57 @@
+{
+  "summary": "Verified defects D1-D10 ('segunda prueba') end-to-end on bellavida. Backend: new pytest suite test_defects_d1_d10.py 10/10 pass; regression test_salon_rules.py 24/24 pass (one old test updated because D2 now blocks checkout of future appts). Frontend (Playwright, desktop): all 10 defects verified working in UI. Found 1 new backend logic bug (re-cancelling an already-cancelled appointment double-counts) plus minor UX issues. All TEST_ data cleaned and bellavida rules reset; trinity company untouched.",
+  "verified": {
+    "D1": "PASS - portal Mis citas with '48887766' -> OTP stored for +50248887766, visible in /wa/messages + /wa/conversations; verify, account list and cancel work; unknown phone gets same generic message and no wa message stored",
+    "D2": "PASS - checkout and status=completed on future appt return 400 'La cita aún no empieza...'; Agenda dialog: appt-status-completed disabled + appt-future-hint shown; past appt enabled; past appt checkout OK with paid_date=today",
+    "D3": "PASS - cancel-preview shape correct; UI shows cancel-policy-info, cancel-late-flag (15.2 h < 24 h), cancel-apply-policy checked by default, cancel-refund-info toggles Q0.00/Q360.00; apply_policy=true -> cancel_type late, late_cancel, client.late_cancels+1, WA cancellation+policy, notification 'Anticipo no reembolsable'; apply_policy=false -> cancel_type salon, full refund, WA text 'devolveremos', notification 'Anticipo por devolver'; on-time -> cancel_type on_time; appt-cancel-type shows 'Cancelación tardía · motivo · Reembolso Q0.00'; client-cancellations hint '1 cancelación(es) tardía(s)'",
+    "D4": "PASS - portal today shows only 'Hoy ya no hay turnos, estos son los próximos:' (no 'Horario no disponible'); staff AppointmentForm shows the Hoy title for today and the default title for other dates",
+    "D5": "PASS - Corte -> '¡Reserva registrada!' without deadline; Balayage -> 'Reserva pendiente de anticipo' + 'Envíe Q360.00 dentro de 12 horas...'",
+    "D6": "PASS - default range 2026-10-01..2026-10-15 (Quincenal), comm-fortnight same, commissions-empty shows for empty range; appointment dated 40 days ago but paid today is counted in today's range (paid_date filter)",
+    "D7": "PASS - counter sale dropping stock 3->2 (min 2) creates single 'Existencia baja' notification 'Name (2/2)' (no duplicate on further drop); dashboard shows low-stock-alert 'Existencia baja: TEST_UIProd (2/2)'",
+    "D8": "PASS - typed slug respected (company created with slug test-ui-mi-enlace); taken slug -> 400 'ya está en uso' with suggestions; slug-status UI shows availability/suggestions",
+    "D9": "PASS - new product appears in sale-product-0 select immediately without reload",
+    "D10": "PASS - price<cost shows confirm; dismiss keeps dialog open and does not save; accept saves and closes"
+  },
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/appointments/{id}/status {status:'cancelled'}", "issue": "No guard against cancelling an appointment that is already cancelled. Re-cancel returns 200 and re-runs side effects: client.late_cancels incremented again (1->2), cancellation WhatsApp re-sent, 'Anticipo ...' notification duplicated, waitlist re-notified, deposit_next re-set. Reproduced via API on a late-cancelled appt. Agenda dialog still shows Cancelar/No asistió/Atendida buttons for cancelled appts (week view), so staff can trigger this from UI.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/appointments/{id}/status", "issue": "status no_show / confirmed also allowed on a cancelled appointment (no state-transition validation in engine.set_status)"},
+      {"endpoint": "GET /api/commissions", "issue": "All 104 seeded completed bellavida appointments have no 'commission' field, so Comisiones page shows Q0.00 commission for every stylist in the current period (seed-data issue, not D6 logic)"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Agenda ApptDialog (cancelled appt)", "issue": "Action buttons (Atendida disabled/enabled, No asistió, Cancelar) and reschedule form are rendered for status=cancelled; should be hidden like for completed", "selector": "[data-testid=appt-status-cancelled]", "priority": "HIGH"},
+      {"component": "Inventory counter sale", "issue": "After a successful sale the payment rows keep the old amount (e.g. 30) while total resets to Q0.00, showing red 'Pagado Q30.00 de Q0.00' error; reset payment rows after sale", "selector": "[data-testid=counter-sale]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Portal success (booking-success)", "issues": ["After booking the page does not scroll to the success card; success-title/deposit deadline end up above the viewport so the client may miss 'Reserva pendiente de anticipo'"]},
+      {"screen": "Agenda day/month view", "issues": ["Cancelled appointments are hidden in day/month views (only week view shows them), so appt-cancel-type is only reachable from week view"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_defects_d1_d10.py", "/app/backend/tests/test_salon_rules.py", "/app/backend/tests/ui_setup_d2d3.py", "/app/backend/tests/cleanup_iter4.py", "/app/test_reports/pytest/pytest_defects.xml"],
+  "action_items": [
+    "engine.set_status: reject cancelling an already-cancelled appointment (and other invalid transitions from cancelled), or make side effects idempotent (late_cancels inc, WA, notifications)",
+    "Agenda ApptDialog: hide status actions/reschedule when appt.status === 'cancelled'",
+    "Inventory: reset PaymentRows after counter sale",
+    "Portal: scroll to booking-success after booking",
+    "Optional: backfill commission/paid_net on seeded completed appointments"
+  ],
+  "critical_code_review_comments": [
+    "engine.set_status has no state machine: any status can transition to any other (cancelled->cancelled/no_show/confirmed) with side effects repeated",
+    "Agenda.jsx future check uses browser-parsed nowGT() (toLocaleString round-trip) - works, but backend is source of truth; fine",
+    "D10 price<cost check is frontend-only (window.confirm); API accepts any price - acceptable as warning",
+    "stock_move reads product before $inc (non-atomic); concurrent sales could miss or duplicate the low-stock notification - low risk"
+  ],
+  "updated_files": ["/app/backend/tests/test_defects_d1_d10.py", "/app/backend/tests/test_salon_rules.py (checkout test shifts appt to past; notification cleanup uses 'text' field)", "/app/backend/tests/ui_setup_d2d3.py", "/app/backend/tests/cleanup_iter4.py"],
+  "success_rate": {"backend": "100% of requested D1-D10 checks (10/10 + 24/24 regression); 1 new HIGH bug found", "frontend": "100% of D1-D10 UI checks; 1 HIGH + 1 LOW UI bug found"},
+  "test_credentials": "admin@bellavida.com / Demo2026!, recepcion@bellavida.com / Demo2026! (from /app/memory/test_credentials.md); bcrypt hash starts with $2b$",
+  "seed_data_creation": "None persisted; all TEST_ clients/appointments/products/sales/notifications/signup company removed via cleanup_iter4.py; bellavida salon-rules reset.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run serially: pytest /app/backend/tests/test_defects_d1_d10.py -n 0 and test_salon_rules.py -n 0. Container date 2026-10-15 ~22:40 Guatemala, so today has no slots (D4) and tomorrow appts are < 24 h (late cancel). Notifications use field 'text' (not 'body'); portal client token header is X-Client-Token. Balayage (c7ac7bc8bee5) requires Q360 deposit. Cancelled appts are visible only in Agenda week view. After tests run python /app/backend/tests/cleanup_iter4.py. Do not touch salon-retest-trinity.",
+  "rca of the issue": "Double-cancel: engine.set_status(status='cancelled') never checks a['status']=='cancelled'; it recomputes cancel_preview and re-runs $inc late_cancels, wa_send, notify_company and notify_waitlist. ApptDialog only hides actions for status 'completed'. Repro: book tomorrow Balayage, mark deposit, POST status cancelled apply_policy true twice -> client.late_cancels=2, 2 cancellation WA messages, 2 notifications. Fix: early raise BookingError('La cita ya está cancelada') when a['status']=='cancelled' and status=='cancelled' (and block no_show/completed from cancelled), and hide buttons in UI."
+}
