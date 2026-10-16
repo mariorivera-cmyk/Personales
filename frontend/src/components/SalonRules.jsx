@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { RotateCcw, Lock } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { Panel, Loader } from "@/components/Common";
+import { useAuth } from "@/context/Auth";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -68,6 +69,7 @@ export function SalonRules() {
   const [services, setServices] = useState([]);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { checkSetup } = useAuth();
   const load = (s = scope) => api.get("/salon-rules", { params: { branch_id: s } }).then((r) => {
     setData(r.data); setVals(r.data.effective);
     setOwn(Object.fromEntries(r.data.schema.map((d) => [d.key, !s || d.key in r.data.branch])));
@@ -87,9 +89,13 @@ export function SalonRules() {
       if (own[d.key] && (changed || !(d.key in data.branch))) values[d.key] = conv(d, vals[d.key]);
       if (!own[d.key] && d.key in data.branch) values[d.key] = null;
     });
-    if (!Object.keys(values).length) return toast.info("No hay cambios por guardar");
+    if (!Object.keys(values).length) {
+      if (data.reviewed) return toast.info("No hay cambios por guardar");
+      try { await api.post("/salon-rules/reviewed"); toast.success("Reglas sugeridas confirmadas"); load(); checkSetup(); } catch (e) { toast.error(errMsg(e)); }
+      return;
+    }
     setBusy(true);
-    try { await api.put("/salon-rules", { branch_id: scope, values }); toast.success("Reglas guardadas: aplican a las nuevas reservas"); load(); } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
+    try { await api.put("/salon-rules", { branch_id: scope, values }); toast.success("Reglas guardadas: aplican a las nuevas reservas"); load(); checkSetup(); } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
   };
   const reset = async () => {
     try { await api.post("/salon-rules/reset", { branch_id: scope }); toast.success(scope ? "La sucursal vuelve a usar las reglas generales" : "Valores sugeridos restaurados"); load(); } catch (e) { toast.error(errMsg(e)); }
@@ -108,7 +114,7 @@ export function SalonRules() {
             {data.branches.map((b) => <option key={b.id} value={b.id}>Sucursal: {b.name}</option>)}
           </select>
           {canEdit && <Button variant="outline" onClick={() => setConfirm(true)} data-testid="rules-reset-btn"><RotateCcw className="mr-1 h-4 w-4" />{scope ? "Usar reglas generales" : "Restaurar sugeridos"}</Button>}
-          {canEdit && <Button onClick={save} disabled={busy} data-testid="rules-save-btn">{busy ? "Guardando..." : "Guardar reglas"}</Button>}
+          {canEdit && <Button onClick={save} disabled={busy} data-testid="rules-save-btn">{busy ? "Guardando..." : data.reviewed ? "Guardar reglas" : "Guardar y confirmar reglas"}</Button>}
         </div>
       </div>
       <div className="grid gap-6 xl:grid-cols-2">

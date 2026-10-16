@@ -100,7 +100,7 @@ export default function Layout() {
               <button className="underline" onClick={() => { enterCompany(null); nav("/admin/empresas"); }} data-testid="exit-company-btn">Salir</button>
             </div>
           )}
-          {company?.slug && !setup && (
+          {company?.slug && !setup && company.setup_complete && (
             <a href={`/b/${company.slug}`} target="_blank" rel="noreferrer" className="ml-auto flex items-center gap-1 text-sm text-slate-600 hover:text-primary" data-testid="portal-link">
               Portal de reservas <ExternalLink className="h-3.5 w-3.5" />
             </a>

@@ -135,7 +135,7 @@ async def handle_inbound(to_number, phone, text):
     await insert("wa_messages", {"id": uid(), "company_id": cid, "phone": phone, "direction": "in", "text": text, "kind": "client", "created_at": now_iso()})
     if company["status"] in ("suspended", "cancelled"):
         reply = company.get("settings", {}).get("suspension_message") or SUSPENDED_MSG
-    elif "whatsapp" not in company.get("enabled_modules", []):
+    elif "whatsapp" not in company.get("enabled_modules", []) or not company.get("setup_complete"):
         reply = "Gracias por escribirnos. Un asesor le atenderá pronto."
     else:
         reply = await bot_reply(company, phone, text, history[::-1])

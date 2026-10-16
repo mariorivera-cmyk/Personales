@@ -14,7 +14,7 @@ export function Onboarding() {
   const { company, refresh } = useAuth();
   const load = () => api.get("/onboarding").then((r) => {
     setD(r.data);
-    if (r.data.setup_complete && company && !company.setup_complete) { toast.success("¡Su salón está configurado! Ya tiene acceso a todas las opciones."); refresh(); }
+    if (r.data.setup_complete && company && !company.setup_complete) { toast.success("¡Su salón está configurado! Ya tiene acceso a todas las opciones.", { id: "setup-done" }); refresh(); }
   }).catch(() => {});
   useEffect(() => { load(); }, []); // eslint-disable-line
   if (!d || d.dismissed) return null;

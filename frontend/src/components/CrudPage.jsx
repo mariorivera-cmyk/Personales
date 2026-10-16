@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { PageHeader, EmptyState, Loader } from "@/components/Common";
+import { useAuth } from "@/context/Auth";
 
 const B = process.env.REACT_APP_BACKEND_URL;
 
@@ -167,6 +168,7 @@ export function FormDialog({ open, onOpenChange, title, fields, initial, onSubmi
 export default function CrudPage({ title, subtitle, endpoint, fields, columns, testid, rowActions, canWrite = true, defaults = {}, embedded, extraActions, onSaved, beforeSave }) {
   const [rows, setRows] = useState(null);
   const [edit, setEdit] = useState(null);
+  const { checkSetup } = useAuth();
   const load = useCallback(() => api.get(endpoint).then(({ data }) => setRows(data)).catch((e) => { setRows([]); toast.error(errMsg(e)); }), [endpoint]);
   useEffect(() => { load(); }, [load]);
   const save = async (form) => {
@@ -176,6 +178,7 @@ export default function CrudPage({ title, subtitle, endpoint, fields, columns, t
     toast.success("Guardado");
     load();
     onSaved && onSaved();
+    checkSetup();
   };
   const del = async (row) => {
     if (!window.confirm("¿Eliminar este registro?")) return;

@@ -1,0 +1,40 @@
+{
+  "summary": "Tested the setup lock (guía de arranque obligatoria) on backend and frontend. Backend: 9/9 pytest pass (test_setup_gate.py). The UI flow works end to end: after signup, the sidebar shows only Dashboard/Servicios/Sucursales/Estilistas/Configuración/Mi suscripción plus setup-nav-note. portal-link is hidden. setup-home shows 'Configuremos su salón' with 0/4 required steps. There is no dismiss button, no share button, no QR and no KPIs. /app/agenda, /app/clientes, /app/caja and /app/reportes redirect to /app. /b/<slug> shows 'Este salón aún está preparando su portal'. After all 4 steps: a toast 'su salón está configurado' appears, the full nav, KPIs, portal-link, dismiss, share and QR all show, and the portal works. setup_complete stays set after the services and stylists are deleted. Bellavida is unaffected. The super admin sees the full nav in an incomplete company. ONE HIGH BUG: a new salon cannot finish the 'rules' step by accepting the suggested defaults.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/wa/inbound (handle_inbound)", "issue": "The WhatsApp bot does not check setup_complete. An incomplete salon whose WhatsApp number receives messages still gets bot replies and bookings, while the portal is locked."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "SalonRules (Configuración > Reglas del salón)", "issue": "On a new salon, clicking 'Guardar reglas' without changing anything shows the toast 'No hay cambios por guardar' and returns early. No API call is made and rules_reviewed is never set, so the step stays at 3/4. The user must change a rule just to finish the guide. 'Restaurar sugeridos' does not mark the step either. The backend endpoint POST /api/salon-rules/reviewed exists but the frontend never calls it.", "selector": "[data-testid='rules-save-btn']", "priority": "HIGH"},
+      {"component": "Onboarding toast", "issue": "The toast '¡Su salón está configurado!' showed twice when the guide was completed. SetupHome's Onboarding and then Main's Onboarding both call load() before company refreshes. Fix: give the toast a fixed id, e.g. toast.success(msg, {id:'setup-done'}).", "selector": "[data-sonner-toast]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Completing the last step on a non-dashboard page", "issue": "The nav unlocks only when the user returns to the Dashboard, because the Onboarding load runs only there. After saving the last required step (e.g. rules in Config) the user stays restricted with no hint. Consider calling refresh()/onboarding after saving in Config/Servicios/Estilistas/Sucursales.", "affected_selectors": ["[data-testid='setup-nav-note']"]}
+    ],
+    "design_issues": [
+      {"screen": "Super admin inside an incomplete company", "issues": ["The full nav shows as expected. The Dashboard still renders SetupHome, which is acceptable. The header portal-link shows even though the portal returns 403. This is minor."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_setup_gate.py", "/app/test_reports/pytest/pytest_setup_gate.xml"],
+  "action_items": [
+    "HIGH: Let a new salon complete the 'rules' step without editing a rule. In SalonRules.save, when there are no changes and data.reviewed is false, call POST /salon-rules/reviewed (or add a 'Confirmar reglas sugeridas' button), then show a success toast and reload.",
+    "LOW: Dedupe the setup-complete toast with a sonner toast id.",
+    "LOW: Refresh the auth company / onboarding after saving a setup step so the nav unlocks without returning to the Dashboard.",
+    "LOW: Decide whether the WhatsApp bot should reply for salons with setup_complete=false."
+  ],
+  "critical_code_review_comments": [
+    "The restriction is enforced only in the frontend Layout. Backend company APIs (agenda, clients, POS) are still reachable for incomplete salons. This is OK as a UX gate but it is not a real lock.",
+    "routes_extra.setup_steps writes setup_complete=True from a GET /onboarding side effect. It works, but completion is only persisted when someone calls GET /onboarding (or at startup migration). A rules save alone does not flip it. Consider computing it in the step-mutating endpoints.",
+    "Signup removes '_' from the name for the slug ('TEST_Setup Salon' -> 'testsetup-salon'). This is fine."
+  ],
+  "updated_files": ["/app/backend/tests/test_setup_gate.py"],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "90% (all flows pass; the rules step cannot be finished with the suggested defaults)"},
+  "seed_data_creation": "Created TEST_ companies via /api/signup (API test, UI test, SA test). All were deleted with tests/cleanup_v2.py. Companies left: bellavida, salon-retest-trinity, wwwpruebacom (untouched).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest tests/test_setup_gate.py (it creates its own TEST_ company; clean up with tests/cleanup_v2.py). To retest the rules bug in the UI: sign up, add a service and stylist, set the description and branch address, go to /app/config?tab=reglas, click rules-save-btn with no edits, then go back to /app. The panel should show 4/4 and unlock the nav.",
+  "rca of the issue": "SalonRules.jsx save() builds values from changed fields only, and returns early with toast.info('No hay cambios por guardar') when nothing changed. rules_reviewed is set only in backend save_rules (PUT /salon-rules) or POST /salon-rules/reviewed, and the UI never calls the latter. So accepting the defaults never satisfies the step."
+}

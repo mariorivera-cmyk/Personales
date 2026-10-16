@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 
 const Ctx = createContext(null);
@@ -45,10 +46,15 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem("company_ctx");
     await refresh();
   };
+  const checkSetup = async () => {
+    if (!company || company.setup_complete) return;
+    const r = await api.get("/onboarding").catch(() => null);
+    if (r?.data.setup_complete) { toast.success("¡Su salón está configurado! Ya tiene acceso a todas las opciones.", { id: "setup-done" }); await refresh(); }
+  };
   const has = (mod) => (company?.enabled_modules || []).includes(mod);
 
   return (
-    <Ctx.Provider value={{ user, company, login, logout, refresh, enterCompany, setToken, has }}>
+    <Ctx.Provider value={{ user, company, login, logout, refresh, enterCompany, setToken, has, checkSetup }}>
       {children}
     </Ctx.Provider>
   );

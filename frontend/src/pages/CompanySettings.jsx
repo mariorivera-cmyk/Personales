@@ -10,12 +10,12 @@ import CrudPage, { FieldInput } from "@/components/CrudPage";
 import { SalonRules } from "@/components/SalonRules";
 
 function General() {
-  const { company, refresh } = useAuth();
+  const { company, refresh, checkSetup } = useAuth();
   const [f, setF] = useState(company);
   const s = f.settings || {};
   const setS = (k, v) => setF({ ...f, settings: { ...s, [k]: v } });
   const save = async () => {
-    try { await api.put("/company", f); toast.success("Configuración guardada"); refresh(); } catch (e) { toast.error(errMsg(e)); }
+    try { await api.put("/company", f); toast.success("Configuración guardada"); await refresh(); checkSetup(); } catch (e) { toast.error(errMsg(e)); }
   };
   const legal = s.legal || {};
   const social = f.social || {};
