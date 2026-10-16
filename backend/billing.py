@@ -85,7 +85,7 @@ async def mark_paid(company, inv):
             "next_billing_date": advance(inv["date"], company.get("billing_cycle")), "converted": True}})
     await email_send(company["id"], company.get("contact_email", ""), f"Factura {inv['number']}", "Adjuntamos su factura electrónica.")
     open_ = await db.invoices.count_documents({"company_id": company["id"], "status": {"$in": ["pending", "failed"]}})
-    if open_ == 0 and company["status"] != "cancelled":
+    if open_ == 0 and company["status"] in ("trial", "past_due", "suspended_partial", "suspended"):
         await db.companies.update_one({"id": company["id"]}, {"$set": {"status": "active", "past_due_since": None}})
 
 
@@ -242,7 +242,7 @@ async def account_statement(company, start, end):
         if start <= m["date"] <= end:
             bal = round(bal + m["charge"] - m["payment"], 2) + 0.0
             rows.append({**m, "balance": bal})
-    pending = [{"id": i["id"], "number": i["number"], "date": i["date"], "total": i["total"]} for i in invs if i["status"] == "pending"]
+    pending = [{"id": i["id"], "number": i["number"], "date": i["date"], "total": i["total"]} for i in invs if i["status"] in ("pending", "failed")]
     return {"company": {k: company.get(k) for k in ("id", "name", "nit", "currency", "status", "contact_email")}, "start": start, "end": end,
             "opening": opening, "charges": round(sum(r["charge"] for r in rows), 2), "payments": round(sum(r["payment"] for r in rows), 2),
             "closing": bal, "rows": rows, "pending_invoices": pending, "generated_at": now_iso()}

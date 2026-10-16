@@ -1,0 +1,36 @@
+{
+  "summary": "Tested manual payments (register/void) on the super admin side and the account statement (admin + company admin) end to end. Backend: 19/20 pytest pass. UI: the Pagos dialog, the void dialog, the Estado de cuenta section in the Empresas detail (including a partial payment from that detail), PDF/XLSX downloads, the empty state, and Mi suscripción > billing-account-statement all work. One business-logic gap: invoices with status 'failed' (card rejected, which is the normal past_due case) cannot be paid manually.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/admin/payments/manual + account_statement.pending_invoices", "issue": "Only invoices with status=='pending' are accepted or listed. When charge() is rejected it sets the invoice to 'failed' and the company to past_due, so that company's unpaid invoices never show in mp-invoice-select and the API returns 400 'La factura no está pendiente'. The super admin cannot apply a manual transfer to the overdue invoice, so the invoice cannot be closed and the company cannot be reactivated through invoice settlement. mark_paid already treats both pending and failed as open.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/admin/payments/{id}/void", "issue": "The invoice returns to pending correctly, but the company status is not re-evaluated. A past_due company that was reactivated by the manual payment stays 'active' after the payment is voided (verified in UI: TEST company stayed Activa)."},
+      {"endpoint": "POST /api/admin/payments/{id}/decision", "issue": "Existing code, not new: mark_paid(c, one(invoice_id)) crashes with a 500 if the pending payment has no invoice_id (None)."},
+      {"endpoint": "mark_paid", "issue": "Reactivates the company to 'active' from any non-cancelled status (including paused, suspended), not only past_due."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Manual payment for past_due company", "issue": "mp-invoice-select omits 'failed' invoices (same root cause as the backend issue)", "affected_selectors": ["[data-testid='mp-invoice-select']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_manual_payments_statement.py", "/app/test_reports/pytest/pytest_iter10.xml"],
+  "action_items": [
+    "Allow manual payments against invoices in status 'failed' as well as 'pending' (backend check + pending_invoices list in account_statement)",
+    "On void: if the invoice reverts to pending/failed, re-evaluate the company status (e.g. back to past_due when it was reactivated by this payment)",
+    "Guard payment_decision against a missing invoice_id"
+  ],
+  "critical_code_review_comments": [
+    "The register-payment-btn testid is used both in the Pagos header and in the company detail (two instances in the DOM when both are mounted is unlikely, but the testid is not unique)",
+    "In account_statement, voided invoices are excluded but card payments for them are not; this is consistent only if void invoices never had payments"
+  ],
+  "updated_files": ["/app/backend/tests/test_manual_payments_statement.py"],
+  "success_rate": {"backend": "95% (19/20)", "frontend": "100% of the tested flows"},
+  "seed_data_creation": "TEST_Pay*/TEST_UIPay* companies were created with invoices inserted directly into Mongo, then all deleted. No manual payments are left in the DB. Bellavida was not modified.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest tests/test_manual_payments_statement.py. test_failed_invoice_can_be_paid_manually is expected to fail until the 'failed' status is accepted. Company admins get 403 on admin endpoints and receptionists get 403 on /billing/account-statement (both verified). Running balance, opening balance, start>end 400, 404, PDF (%PDF) and XLSX (PK) all verified."
+}

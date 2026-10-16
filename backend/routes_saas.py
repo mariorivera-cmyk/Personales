@@ -334,12 +334,14 @@ async def manual_payment(body: dict = Body(...), u=Depends(super_admin)):
     inv = None
     if body.get("invoice_id"):
         inv = await one("invoices", {"id": body["invoice_id"], "company_id": c["id"]})
-        if not inv or inv["status"] != "pending":
+        if not inv or inv["status"] not in ("pending", "failed"):
             raise HTTPException(400, "La factura no está pendiente")
     p = await insert("payments", {"id": uid(), "company_id": c["id"], "company_name": c["name"], "invoice_id": inv["id"] if inv else None,
                                   "invoice_number": inv["number"] if inv else "", "amount": amount, "currency": c.get("currency", "GTQ"),
                                   "method": method, "status": "approved", "reference": (body.get("reference") or "").strip(),
-                                  "note": (body.get("note") or "").strip(), "manual": True, "decided_by": u["email"], "date": date, "created_at": now_iso()})
+                                  "note": (body.get("note") or "").strip(), "manual": True, "decided_by": u["email"], "date": date, "created_at": now_iso(),
+                                  "prev_invoice_status": inv["status"] if inv else None, "prev_company_status": c["status"],
+                                  "prev_past_due_since": c.get("past_due_since")})
     if inv:
         paid = sum(x["amount"] for x in await find("payments", {"invoice_id": inv["id"], "status": "approved"}))
         if paid + 0.005 >= inv["total"]:
@@ -362,7 +364,11 @@ async def void_payment(pid: str, body: dict = Body(default={}), u=Depends(super_
         inv = await one("invoices", {"id": p["invoice_id"]})
         paid = sum(x["amount"] for x in await find("payments", {"invoice_id": p["invoice_id"], "status": "approved"}))
         if inv and inv["status"] == "paid" and paid + 0.005 < inv["total"]:
-            await db.invoices.update_one({"id": inv["id"]}, {"$set": {"status": "pending"}, "$unset": {"paid_at": ""}})
+            await db.invoices.update_one({"id": inv["id"]}, {"$set": {"status": p.get("prev_invoice_status") or "pending"}, "$unset": {"paid_at": ""}})
+            co = await one("companies", {"id": p["company_id"]})
+            prev = p.get("prev_company_status")
+            if co and co["status"] == "active" and prev in ("past_due", "suspended_partial", "suspended"):
+                await db.companies.update_one({"id": co["id"]}, {"$set": {"status": prev, "past_due_since": p.get("prev_past_due_since")}})
     await history(p["company_id"], u, f"Pago anulado {p.get('currency', 'GTQ')} {p['amount']:,.2f}: {reason}")
     await audit(u, p["company_id"], "void_payment", "payment", f"{pid} {reason}")
     return {"ok": True}
@@ -405,9 +411,11 @@ async def payment_decision(pid: str, body: dict = Body(...), u=Depends(super_adm
         raise HTTPException(400, "Pago no pendiente")
     ok = bool(body.get("approve"))
     await db.payments.update_one({"id": pid}, {"$set": {"status": "approved" if ok else "rejected", "decided_by": u["email"]}})
-    if ok:
+    if ok and p.get("invoice_id"):
         c = await one("companies", {"id": p["company_id"]})
-        await mark_paid(c, await one("invoices", {"id": p["invoice_id"]}))
+        inv = await one("invoices", {"id": p["invoice_id"]})
+        if inv:
+            await mark_paid(c, inv)
     await audit(u, p["company_id"], "payment_decision", "payment", f"{pid} {ok}")
     return {"ok": True}
 
