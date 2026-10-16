@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { api, errMsg, money, todayStr, addDays, DAYS, STATUS } from "@/lib/api";
@@ -193,8 +193,10 @@ export default function Agenda() {
   const [creating, setCreating] = useState(false);
   const [s, e] = range(view, date);
   const canEdit = user.role !== "stylist";
+  const reqId = useRef(0);
   const load = useCallback(() => {
-    api.get("/appointments", { params: { start: s, end: e, branch_id: branch } }).then((r) => setAppts(r.data)).catch((x) => toast.error(errMsg(x)));
+    const id = ++reqId.current;
+    api.get("/appointments", { params: { start: s, end: e, branch_id: branch } }).then((r) => { if (id === reqId.current) setAppts(r.data); }).catch((x) => toast.error(errMsg(x)));
   }, [s, e, branch]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
@@ -87,7 +88,7 @@ export function TemplatesButton({ onDone }) {
   return (
     <>
       <Button variant="outline" onClick={load} data-testid="service-templates-btn">Usar plantillas</Button>
-      {open && (
+      {open && createPortal(
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setOpen(false)}>
           <div className="max-h-[85vh] w-full max-w-xl overflow-auto rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()} data-testid="templates-dialog">
             <h3 className="mb-3 font-heading text-lg font-bold">Plantillas de servicios (editables)</h3>
@@ -101,7 +102,7 @@ export function TemplatesButton({ onDone }) {
             ))}
             <Button className="mt-3 w-full" onClick={save} disabled={!items.some((x) => x.on)} data-testid="templates-save">Agregar seleccionados</Button>
           </div>
-        </div>
+        </div>, document.body
       )}
     </>
   );

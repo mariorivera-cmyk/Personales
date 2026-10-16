@@ -106,6 +106,13 @@ async def void_sale(sid: str, body: dict = Body(default={}), c=Depends(guard(("c
         raise HTTPException(400, "Cobro no válido")
     await db.sales.update_one({"id": sid}, {"$set": {"voided": True, "void_reason": body.get("reason", ""), "voided_by": c["user"]["email"]}})
     if s.get("appointment_id"):
+        a = await one("appointments", {"id": s["appointment_id"]}) or {}
+        if a and "loyalty" in c["company"].get("enabled_modules", []):
+            per = float(c["company"].get("settings", {}).get("loyalty", {}).get("points_per_100", 10))
+            await db.clients.update_one({"id": a["client_id"]}, {"$inc": {"points": -int(a["price"] / 100 * per)}})
+        for sv in await find("services", {"id": {"$in": [a.get("service_id")] + a.get("addon_ids", [])}}):
+            for item in sv.get("consumes") or []:
+                await E.stock_move(c["cid"], item["product_id"], float(item.get("qty") or 1), "Anulación de cobro", sid)
         await db.appointments.update_one({"id": s["appointment_id"]}, {"$set": {"status": "confirmed"}, "$unset": {"paid_net": "", "sale_id": "", "commission": ""}})
     for it in s.get("items", []):
         await E.stock_move(c["cid"], it["product_id"], it["qty"], "Anulación de venta", sid)
@@ -119,6 +126,10 @@ async def cash_close(date: str = "", branch_id: str = "", format: str = "", c=De
     if branch_id:
         q["branch_id"] = branch_id
     sales = await find("sales", q, [("created_at", 1)])
+    from datetime import datetime
+    from core import TZ
+    for s in sales:
+        s["local_time"] = datetime.fromisoformat(s["created_at"]).astimezone(TZ).strftime("%H:%M")
     ok = [s for s in sales if not s["voided"]]
     by_method, by_branch, by_stylist = {}, {}, {}
     for s in ok:
@@ -133,7 +144,7 @@ async def cash_close(date: str = "", branch_id: str = "", format: str = "", c=De
            "total": round(sum(s["total"] for s in ok), 2), "tips": round(sum(s["tip"] for s in ok), 2),
            "discounts": round(sum(s["discount"] for s in ok), 2), "count": len(ok)}
     if format == "xlsx":
-        rows = [[s["created_at"][11:16], s["description"], s.get("stylist_name") or "Mostrador", s.get("branch_name"), s["net"], s["tip"],
+        rows = [[s["local_time"], s["description"], s.get("stylist_name") or "Mostrador", s.get("branch_name"), s["net"], s["tip"],
                  ", ".join(f"{p['method']} {p['amount']}" for p in s["payments"]), s["total"], "ANULADO" if s["voided"] else ""] for s in sales]
         rows += [[], ["Por método"]] + [[k, v] for k, v in by_method.items()]
         return xlsx(["Hora", "Concepto", "Estilista", "Sucursal", "Neto", "Propina", "Pagos", "Total", "Estado"], rows, f"cierre_{q['date']}")

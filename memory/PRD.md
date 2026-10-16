@@ -24,6 +24,20 @@ Super Administrador, Administrador de Empresa, Gerente de Sucursal, Recepcionist
 - SaaS: planes, módulos con precio, cupones, configuración (impuesto, moneda, descuento anual, prueba, gracia, reintentos, extras), alta autoservicio, toggles con prorrateo, facturas PDF, pagos tarjeta/transferencia con aprobación, morosidad → suspensión parcial/total → reactivación, estado de cuenta, export Excel, MRR/ARR/churn/conversión, costo WhatsApp.
 - MOCKED: pasarela de pagos, FEL (certificador), envío real de WhatsApp/email/SMS.
 
+## Implemented v2 (2026-10-15) — requerimientos_salonflow_v2 (R1–R20)
+- R1 OTP 6 dígitos para "Mis citas" (hash, 10 min, 5 intentos→bloqueo 15 min, 3 envíos/h, sesión 30 min, respuesta uniforme).
+- R2 Estados Atendida/No asistió/Cancelar con log; atendida solo la corrige admin; "Pendientes de cerrar" en dashboard.
+- R3 Cobro en caja manual (efectivo/POS/transferencia/mixto, propina, descuento con motivo), Cierre de caja + Excel, anulación por admin (revierte puntos y stock).
+- R4 Portal: descripción, logo/fotos (media), mapa, horarios, equipo, redes, lang=es, título con nombre.
+- R5 Política de cancelación, anticipo manual con datos bancarios, "Anticipo recibido", liberación automática, cancelación tardía, alerta/anticipo forzado por faltas.
+- R6 Diálogo de cancelación con motivo, mensajes vacíos con "Crear el primero", loaders, "Hoy ya no hay turnos".
+- R7 Guía de arranque + QR; plantillas de servicios. R8 Registro de 4 campos + slug con sugerencias; activación con NIT/tarjeta y total con IVA; aviso fin de prueba.
+- R9 Multi-servicio con estilista por servicio y horarios seguidos; foto, "Desde", pausas. R10 Recordatorios con plantilla, dirección, enlace, fallback a correo.
+- R11 Comisiones (%/fijo/sueldo/propinas) + Excel. R12 Ficha técnica: alergias, fórmulas, consentimiento de fotos, antes/después, alertas, auditoría de acceso.
+- R13 Agenda con colores/leyenda, drag & drop, búsqueda de clienta. R14 Selector de país, validaciones, textos de ayuda, pasos, barra móvil.
+- R15 Cuenta cliente (historial, Repetir, puntos, solicitud de borrado). R16 Reseñas por enlace + galería + moderación + aviso calificación baja.
+- R17 Inventario, venta mostrador, consumo por servicio, alertas. R18 Google Calendar + .ics. R19 Pie con términos/privacidad editables. R20 Alerta sucursal sin dirección.
+
 ## Backlog
 - P0: Conectar WhatsApp Cloud API real (token + phone number id por empresa); pasarela Recurrente; FEL con INFILE/Digifact.
 - P1: Cobro de anticipos a clientes finales (sección 7); emails reales (Resend); subdominio por empresa; object storage para archivos.

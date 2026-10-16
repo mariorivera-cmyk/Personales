@@ -20,8 +20,8 @@ with open("/app/frontend/.env") as f:
 
 API = f"{BASE_URL}/api"
 
-TEST_DATE = "2026-10-12"  # Monday (Zona 10 closed on Sunday 2026-10-11)
-TEST_DATE_SUNDAY = "2026-10-11"
+TEST_DATE = "2026-10-26"  # future Monday (update when it passes)
+TEST_DATE_SUNDAY = "2026-10-25"
 SLUG = "bellavida"
 WA_NUMBER = "+50255550001"
 
@@ -285,15 +285,11 @@ class TestPublicPortal:
         })
         assert r2.status_code == 200, r2.text
         aid = r2.json()["id"]
-        # Lookup via phone
-        my = requests.post(f"{API}/public/salon/{SLUG}/my", json={"phone": phone})
-        assert my.status_code == 200
-        assert any(a["id"] == aid for a in my.json())
-        # Cancel
+        # v2 (R1): phone-only lookup removed; managing requires OTP client token (see test_v2_features.py)
+        assert requests.post(f"{API}/public/salon/{SLUG}/my", json={"phone": phone}).status_code in (404, 405)
         cancel = requests.post(f"{API}/public/salon/{SLUG}/appointments/{aid}",
                                json={"phone": phone, "action": "cancel"})
-        assert cancel.status_code == 200
-        assert cancel.json()["status"] == "cancelled"
+        assert cancel.status_code == 401
 
 
 # ============== Waitlist via public ==============

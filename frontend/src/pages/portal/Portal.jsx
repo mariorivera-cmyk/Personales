@@ -103,7 +103,7 @@ export default function Portal() {
   };
   const branchStylists = salon.stylists.filter((s) => s.branch_id === f.branch_id);
   return (
-    <div className="min-h-screen" data-testid="public-portal">
+    <div className="min-h-screen pb-20 lg:pb-0" data-testid="public-portal">
       <header className="fixed top-0 z-50 w-full border-b bg-[#FAF7F2]/85 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-6 py-3">
           {salon.logo_url && <img src={img(salon.logo_url)} alt="logo" className="h-8 w-8 rounded-full object-cover" />}

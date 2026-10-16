@@ -20,7 +20,7 @@ function ImageInput({ id, value, onChange }) {
   return (
     <div className="flex items-center gap-3">
       {value && <img src={value.startsWith("/api") ? B + value : value} alt="" className="h-14 w-14 rounded-lg object-cover" />}
-      <input type="file" accept="image/*" onChange={up} data-testid={id} className="text-xs" />
+      <label className="cursor-pointer rounded-full border bg-white px-3 py-1.5 text-xs hover:border-primary">Subir imagen<input type="file" accept="image/*" onChange={up} data-testid={id} className="hidden" /></label>
       {value && <button type="button" className="text-xs underline" onClick={() => onChange("")}>Quitar</button>}
     </div>
   );

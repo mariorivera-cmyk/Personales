@@ -58,7 +58,7 @@ export function CheckoutDialog({ appt, onClose, onDone }) {
           {Number(f.discount) > 0 && <div><Label>Motivo del descuento</Label><input className="field" value={f.discount_reason} onChange={(e) => setF({ ...f, discount_reason: e.target.value })} data-testid="checkout-discount-reason" /></div>}
           <div className="text-base">Total a cobrar: <b data-testid="checkout-total">{money(due)}</b></div>
           <PaymentRows rows={rows} setRows={setRows} total={due} />
-          <Button className="w-full" onClick={submit} data-testid="checkout-submit">Registrar cobro y marcar Atendida</Button>
+          <Button className="w-full" onClick={submit} disabled={Math.abs(rows.reduce((a, r) => a + Number(r.amount || 0), 0) - due) > 0.01 || (Number(f.discount) > 0 && !f.discount_reason.trim())} data-testid="checkout-submit">Registrar cobro y marcar Atendida</Button>
         </div>
       </DialogContent>
     </Dialog>

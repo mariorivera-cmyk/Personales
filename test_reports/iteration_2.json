@@ -1,0 +1,54 @@
+{
+  "summary": "Iteration 2: tested SalonFlow v2 (R1-R20) backend + frontend. Backend: new pytest suite test_v2_features.py (25 tests) covering OTP portal auth, multi-service booking, deposits/release_unpaid, checkout/caja/void/commissions, reviews, ICS, late cancel, inventory, client lookup/photo consent, media upload, signup/slug/billing quote+activate, reminder email fallback -> 25/25 pass. Old backend_test.py updated (stale past TEST_DATE; /my phone-only lookup intentionally removed by R1) -> total 63/63 pass. Frontend (Playwright): portal (title/lang, description, maps, hours, team, footer+legal dialog, steps, multi-service w/ 'Asígnenme', deposit info w/ bank data, phone validation, success w/ Google Calendar + .ics, 'Hoy ya no hay turnos' msg), Mis citas OTP -> account w/ points, upcoming, history + Repetir; review page 1-5 once; panel dashboard (guía de arranque, QR, Pendientes de cerrar, alerta sucursal sin dirección), agenda legend, deposit received, cancel confirmation dialog, Atendida -> Cobro en caja (mixed payment, tip, discount reason), drag&drop reschedule, Nueva cita client lookup + allergy alert + phone validation, client allergy banner + photo consent rejection, caja totals, comisiones, inventario, reseñas, config policies/legal/portal fields, signup minimal + slug suggestions, Activar mi plan quote w/ IVA. Found 1 high UI bug (templates modal off-screen) and several minor issues.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "engine.book (deposit_due)", "issue": "deposit_due = now + deposit_hours even when the appointment starts sooner than that; release_unpaid may never free the slot before the appointment. Cap deposit_due at min(now+hrs, appointment start - buffer)."},
+      {"endpoint": "POST /api/sales/{sid}/void + engine.set_status", "issue": "Voiding a service sale reopens the appointment to 'confirmed' but does not revert loyalty points or service product consumption; re-checkout awards points and consumes stock again (double counting)."},
+      {"endpoint": "GET /api/cash (detail + xlsx)", "issue": "'Hora' column uses created_at[11:16] which is UTC (shows 03:07 for a 21:07 local cobro). Convert to salon timezone."},
+      {"endpoint": "POST /api/products/sale (frontend payload)", "issue": "Inventory counter-sale UI never sends branch_id, so product sales appear under '-' in Caja 'Por sucursal' and are excluded when filtering by branch."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Onboarding.jsx templates modal (Servicios > Usar plantillas)", "issue": "Modal is rendered with custom 'fixed inset-0' div inside PageHeader actions; an ancestor has transform/animation (fade-up) so 'fixed' is relative to the header box. At 1920x1080 the dialog top is at y=-223: title and first template rows are off-screen/unreachable, overlay only dims the header strip. Playwright click on template-check-0 fails ('element is outside of the viewport'). Fix: use shadcn <Dialog> (portal) or ReactDOM.createPortal(document.body).", "selector": "[data-testid='templates-dialog']", "priority": "HIGH"},
+      {"component": "Portal mobile (390px)", "issue": "Fixed mobile-summary-bar (57px) covers the bottom of the portal footer (Términos/Privacidad/Contacto links). Add bottom padding (e.g. pb-20 lg:pb-0) to the portal container.", "selector": "[data-testid='mobile-summary-bar'], [data-testid='portal-footer']", "priority": "MEDIUM"},
+      {"component": "Checkout.jsx", "issue": "'Registrar cobro' button stays enabled when payments don't sum to total or discount has no reason; only backend 400 toast stops it. Disable submit until balance==total and reason provided.", "selector": "[data-testid='checkout-submit']", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Agenda date input / Signup slug-check", "issue": "Observed once each (not reproducible on retry): after changing agenda-date right after page load, the grid kept showing the previous day's appointments (stale response race - no request cancellation/ignore-stale guard in load()); signup submit once did not proceed. Consider ignoring stale responses (AbortController / request id).", "affected_selectors": ["[data-testid='agenda-date']", "[data-testid='signup-submit-button']"]}
+    ],
+    "design_issues": [
+      {"screen": "Configuración > Portal público", "issues": ["Logo/Foto file inputs are native unstyled inputs showing English 'Choose File / No file chosen' in a Spanish UI"]},
+      {"screen": "Inventario", "issues": ["'Ajustar' uses window.prompt twice (native dialogs) instead of a styled dialog with qty+motivo fields; products CRUD fine"]},
+      {"screen": "Portal Mis citas", "issues": ["Reprogramar uses native date/time pickers; 'Mis citas' phone input has no country-code selector unlike the booking form"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_v2_features.py", "/app/backend/tests/backend_test.py", "/app/backend/tests/cleanup_v2.py", "/app/test_reports/pytest/pytest_iter2.xml"],
+  "action_items": [
+    "HIGH: Fix 'Usar plantillas' modal positioning (render via portal / shadcn Dialog) in components/Onboarding.jsx",
+    "Add bottom padding on portal for mobile so footer links aren't hidden behind mobile-summary-bar",
+    "Show Caja 'Hora' (and xlsx) in salon local time",
+    "Send branch_id from Inventario counter sale (add branch selector)",
+    "On void sale: revert loyalty points and service stock consumption (or prevent double award on re-checkout)",
+    "Cap deposit_due at appointment start",
+    "Disable checkout submit until payments balance and discount reason are valid",
+    "Optional: styled file inputs, replace window.prompt in inventory adjust, ignore stale agenda responses"
+  ],
+  "critical_code_review_comments": [
+    "Frontend depositOf() in Portal.jsx uses svc.duration only; backend deposit_for uses duration incl. add-ons -> preview can differ from charged anticipo when add-ons push duration over min_minutes",
+    "Note for E1: by the configured rule (>=120 min, 30%) only Balayage (180) and Keratina (150) require deposit; Tinte (90 min) does NOT (review request said Tinte too) - behavior is consistent with the rule",
+    "Demo stylists have no commission_pct/fixed/base_salary set, so /app/comisiones shows Q0 commission for all - seed some values for a meaningful demo",
+    "slots-multi useEffect in Portal.jsx has no .catch -> on API error loader spins forever",
+    "billing/activate stores client-supplied 'card' object as-is (not re-validated against a tokenize record) - acceptable for simulated gateway but note for real integration",
+    "CORS still allow_origins from CORS_ORIGINS defaulting to '*' with allow_credentials=True"
+  ],
+  "updated_files": ["/app/backend/tests/test_v2_features.py (new)", "/app/backend/tests/cleanup_v2.py (new)", "/app/backend/tests/backend_test.py (TEST_DATE moved to 2026-10-26/25; public portal test updated for R1 OTP-only management)"],
+  "success_rate": {"backend": "100% (63/63 pytest)", "frontend": "~92% (all R1-R20 flows tested work; templates modal broken layout, mobile footer overlap)"},
+  "seed_data_creation": "None persisted. All TEST_ bookings, sales, reviews, products, clients, OTP codes/locks, wa/email messages, notifications, and 2 TEST_UI signup companies were deleted (cleanup_v2.py). bellavida settings not modified. Pre-existing notification 'Solicitud de borrado de datos +50242764200' in bellavida was not created by this run.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && python -m pytest tests/ -n 0 -q (pytest.ini sets xdist; v2 tests are order-dependent, use -n 0). Then python3 tests/cleanup_v2.py. OTP codes are read from Mongo wa_messages kind='otp' (or via GET /api/wa/messages?phone= with admin token in Playwright). Corte de cabello eligible stylists: Diego/Sofía (not Carla). Balayage only Carla. Today in app TZ 2026-10-15; backend_test.py TEST_DATE=2026-10-26 must be moved forward when it passes. Drag&drop in agenda: use source_position near card top, PX=1.5 px/min from 08:00.",
+  "test_credentials": "From /app/memory/test_credentials.md: admin@bellavida.com / Demo2026!, recepcion@, estilista@, gerente@ (Demo2026!), super mario.rivera@gmail.com / Admin2026!. Passwords bcrypt $2b$, httpOnly cookie set on login, login lockout after 5 fails present.",
+  "rca of the issue": "Templates modal: custom fixed overlay div is a descendant of an element with CSS transform (fade-up animation on PageHeader/actions), which creates a new containing block for position:fixed; dialog is centered relative to the header strip (top ≈ -223px) instead of the viewport. Repro: login as a company_admin, /app/servicios, click 'Usar plantillas' at 1920x1080. Mitigation: portal the modal to document.body (shadcn Dialog)."
+}

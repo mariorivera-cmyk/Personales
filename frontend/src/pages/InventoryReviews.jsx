@@ -12,12 +12,14 @@ export function Inventory() {
   const [sale, setSale] = useState({ items: [{ product_id: "", qty: 1 }] });
   const [rows, setRows] = useState([{ method: "cash", amount: 0 }]);
   const [key, setKey] = useState(0);
+  const [branches, setBranches] = useState([]);
+  useEffect(() => { api.get("/branches").then((r) => { setBranches(r.data); setSale((s) => ({ ...s, branch_id: s.branch_id || r.data[0]?.id })); }); }, []);
   const load = () => api.get("/inventory").then((r) => setD(r.data));
   useEffect(() => { load(); }, [key]);
   if (!d) return null;
   const total = sale.items.reduce((a, it) => a + (d.products.find((p) => p.id === it.product_id)?.price || 0) * Number(it.qty || 0), 0);
   const sell = async () => {
-    try { await api.post("/products/sale", { ...sale, payments: rows }); toast.success("Venta registrada en caja"); setSale({ items: [{ product_id: "", qty: 1 }] }); setKey(key + 1); } catch (e) { toast.error(errMsg(e)); }
+    try { await api.post("/products/sale", { ...sale, payments: rows }); toast.success("Venta registrada en caja"); setSale({ items: [{ product_id: "", qty: 1 }], branch_id: sale.branch_id }); setKey(key + 1); } catch (e) { toast.error(errMsg(e)); }
   };
   const adjust = async (p) => {
     const qty = window.prompt(`Ajuste de ${p.name} (use negativo para restar)`);
@@ -31,6 +33,7 @@ export function Inventory() {
       <PageHeader title="Inventario y productos" subtitle={`Valor del inventario: ${money(d.value)}`} />
       <div className="mb-8 grid gap-6 lg:grid-cols-2">
         <Panel title="Venta en mostrador" testid="counter-sale">
+          <select className="field mb-2" value={sale.branch_id || ""} onChange={(e) => setSale({ ...sale, branch_id: e.target.value })} data-testid="sale-branch">{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
           {sale.items.map((it, i) => (
             <div key={i} className="mb-2 flex gap-2">
               <select className="field" value={it.product_id} onChange={(e) => setItem(i, "product_id", e.target.value)} data-testid={`sale-product-${i}`}>

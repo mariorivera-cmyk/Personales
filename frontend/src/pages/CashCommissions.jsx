@@ -40,7 +40,7 @@ export function CashClose() {
             <thead className="text-left text-xs uppercase text-slate-500"><tr><th className="py-2">Hora</th><th>Concepto</th><th>Estilista</th><th>Pagos</th><th>Total</th><th /></tr></thead>
             <tbody>{d.sales.map((s) => (
               <tr key={s.id} className={`border-t ${s.voided ? "text-muted-foreground line-through" : ""}`}>
-                <td className="py-2">{s.created_at.slice(11, 16)}</td><td>{s.description}</td><td>{s.stylist_name}</td>
+                <td className="py-2">{s.local_time}</td><td>{s.description}</td><td>{s.stylist_name}</td>
                 <td className="text-xs">{s.payments.map((p) => `${METHODS[p.method]} ${money(p.amount)}`).join(" + ")}</td><td>{money(s.total)}</td>
                 <td>{!s.voided && user.role === "company_admin" && <Button size="sm" variant="ghost" onClick={() => voidSale(s)} data-testid={`void-${s.id}`}><Ban className="h-4 w-4 text-rose-600" /></Button>}</td>
               </tr>
