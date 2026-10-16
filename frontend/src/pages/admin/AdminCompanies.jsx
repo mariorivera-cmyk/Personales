@@ -5,6 +5,7 @@ import { Plus, LogIn, Eye } from "lucide-react";
 import { api, errMsg, money } from "@/lib/api";
 import { CompanyStatusPanel, DeleteCompany } from "@/pages/admin/CompanyStatus";
 import { AccountStatement, PaymentButton } from "@/pages/admin/Accounting";
+import { AdvanceChargeButton } from "@/pages/admin/AdvanceCharge";
 import { useAuth } from "@/context/Auth";
 import { PageHeader, CompanyBadge, Label } from "@/components/Common";
 import { Button } from "@/components/ui/button";
@@ -50,7 +51,7 @@ function Detail({ id, plans, modules, onClose, reload }) {
       </div>
       <div><h4 className="mb-2 font-semibold">Facturas</h4><InvoiceTable invoices={d.invoices} cur={cur} /></div>
       <div>
-        <div className="mb-2 flex items-center justify-between"><h4 className="font-semibold">Estado de cuenta</h4><PaymentButton companyId={id} onDone={() => { load(); reload(); setRk((k) => k + 1); }} /></div>
+        <div className="mb-2 flex items-center justify-between"><h4 className="font-semibold">Estado de cuenta</h4><div className="flex gap-2"><AdvanceChargeButton company={d.company} onDone={() => { load(); reload(); setRk((k) => k + 1); }} /><PaymentButton companyId={id} onDone={() => { load(); reload(); setRk((k) => k + 1); }} /></div></div>
         <AccountStatement base={`/admin/companies/${id}/account-statement`} cur={cur} slug={d.company.slug} reloadKey={rk} />
       </div>
       <div><h4 className="mb-2 font-semibold">Historial de plan y módulos</h4>

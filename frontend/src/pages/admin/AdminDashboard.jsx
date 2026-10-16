@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { TrendingUp, Building2, Repeat, Percent, Play, FileSpreadsheet } from "lucide-react";
+import { TrendingUp, Building2, Repeat, Percent, FileSpreadsheet } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend } from "recharts";
 import { api, errMsg, money, download, CO_STATUS } from "@/lib/api";
 import { PageHeader, Kpi, Panel } from "@/components/Common";
@@ -12,18 +12,12 @@ export default function AdminDashboard() {
   const [m, setM] = useState(null);
   const load = () => api.get("/admin/metrics").then((r) => setM(r.data)).catch((e) => toast.error(errMsg(e)));
   useEffect(() => { load(); }, []);
-  const run = async () => {
-    const r = await api.post("/admin/billing/run");
-    toast.success(`Ciclo ejecutado: ${r.data.charged} cobros, ${r.data.failed} rechazados, ${r.data.status_changes} cambios de estado`);
-    load();
-  };
   if (!m) return null;
   const cur = m.currency;
   return (
     <div data-testid="admin-dashboard-page">
       <PageHeader title="Panel SaaS" subtitle="Indicadores del negocio de la plataforma"
-        action={<><Button variant="outline" onClick={() => download("/admin/export", "estado_cuenta_consolidado.xlsx")} data-testid="export-xlsx-btn"><FileSpreadsheet className="mr-1 h-4 w-4" />Exportar Excel</Button>
-          <Button onClick={run} data-testid="run-billing-btn"><Play className="mr-1 h-4 w-4" />Ejecutar ciclo de cobro</Button></>} />
+        action={<Button variant="outline" onClick={() => download("/admin/export", "estado_cuenta_consolidado.xlsx")} data-testid="export-xlsx-btn"><FileSpreadsheet className="mr-1 h-4 w-4" />Exportar Excel</Button>} />
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Kpi label="MRR" value={money(m.mrr, cur)} icon={TrendingUp} testid="kpi-mrr" />
         <Kpi label="ARR" value={money(m.arr, cur)} icon={TrendingUp} testid="kpi-arr" />

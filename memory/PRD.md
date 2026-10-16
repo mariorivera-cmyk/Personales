@@ -68,6 +68,10 @@ Super Administrador, Administrador de Empresa, Gerente de Sucursal, Recepcionist
 - Super Admin > Pagos: "Registrar pago" (empresa, factura pendiente/fallida o abono a cuenta, monto, fecha, método, referencia, nota). Aplica a factura, la marca pagada y reactiva la empresa si estaba en mora. Anular pago manual con motivo (revierte factura y estado).
 - Estado de cuenta por empresa (detalle en Empresas y en Mi suscripción del cliente): rango de fechas, saldo anterior, cargos, abonos, saldo corrido, PDF y Excel. Probado: iteration_10 + correcciones.
 
+## Implemented (2026-10-16) — Cobro adelantado por empresa
+- Se quitó el botón global "Ejecutar ciclo de cobro" y su endpoint (el cobro automático sigue corriendo en segundo plano).
+- En el detalle de cada empresa: "Cobro adelantado" con vista previa (periodo siguiente, detalle, IVA, total, tarjeta) y casilla de confirmación. Solo empresas activas/en prueba, con tarjeta y sin facturas pendientes. Si se aprueba, el próximo cobro pasa al fin del periodo cobrado; si la tarjeta rechaza, la factura se anula y el estado no cambia.
+
 ## Backlog
 - P0: Conectar WhatsApp Cloud API real (token + phone number id por empresa); pasarela Recurrente; FEL con INFILE/Digifact.
 - P1: Cobro de anticipos a clientes finales (sección 7); emails reales (Resend); subdominio por empresa; object storage para archivos.

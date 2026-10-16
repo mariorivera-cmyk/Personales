@@ -80,6 +80,11 @@ async def notify(company, title, text):
 
 async def mark_paid(company, inv):
     await db.invoices.update_one({"id": inv["id"]}, {"$set": {"status": "paid", "paid_at": now_iso()}})
+    if inv["kind"] == "advance":
+        upd = {"next_billing_date": inv["period_to"], "converted": True}
+        if company["status"] == "trial":
+            upd["status"] = "active"
+        await db.companies.update_one({"id": company["id"]}, {"$set": upd})
     if inv["kind"] == "subscription":
         await db.companies.update_one({"id": company["id"]}, {"$set": {
             "next_billing_date": advance(inv["date"], company.get("billing_cycle")), "converted": True}})
@@ -87,6 +92,37 @@ async def mark_paid(company, inv):
     open_ = await db.invoices.count_documents({"company_id": company["id"], "status": {"$in": ["pending", "failed"]}})
     if open_ == 0 and company["status"] in ("trial", "past_due", "suspended_partial", "suspended"):
         await db.companies.update_one({"id": company["id"]}, {"$set": {"status": "active", "past_due_since": None}})
+
+
+async def advance_preview(company):
+    start = company.get("next_billing_date") if company["status"] == "active" else company.get("trial_ends")
+    start = max(start or today(), today())
+    s = await psettings()
+    items = await cycle_items(company)
+    sub = round(sum(i["amount"] for i in items), 2)
+    tax = round(sub * float(s.get("tax_rate", 12)) / 100, 2)
+    card = company.get("card") or {}
+    return {"period_from": start, "period_to": advance(start, company.get("billing_cycle")), "items": items, "subtotal": sub, "tax": tax,
+            "total": round(sub + tax, 2), "currency": company.get("currency", "GTQ"), "card_last4": card.get("last4"),
+            "cycle": company.get("billing_cycle") or "monthly"}
+
+
+async def advance_charge(company):
+    pv = await advance_preview(company)
+    items = [{**i, "desc": f"{i['desc']} · periodo {pv['period_from']} a {pv['period_to']}"} for i in pv["items"]]
+    inv = await create_invoice(company, items, "advance")
+    await db.invoices.update_one({"id": inv["id"]}, {"$set": {"period_from": pv["period_from"], "period_to": pv["period_to"]}})
+    inv = await one("invoices", {"id": inv["id"]})
+    ok = company["card"].get("last4") != "0002"
+    await insert("payments", {"id": uid(), "company_id": company["id"], "company_name": company["name"], "invoice_id": inv["id"],
+                              "invoice_number": inv["number"], "amount": inv["total"], "currency": inv["currency"], "method": "card",
+                              "status": "approved" if ok else "rejected", "reference": f"SIM-{uid()}", "date": today(), "created_at": now_iso()})
+    if ok:
+        await mark_paid(company, inv)
+        await notify(company, "Cobro adelantado", f"Se cobró {inv['currency']} {inv['total']:.2f} (factura {inv['number']}) por el periodo {pv['period_from']} a {pv['period_to']}.")
+    else:
+        await db.invoices.update_one({"id": inv["id"]}, {"$set": {"status": "void", "void_reason": "Tarjeta rechazada en cobro adelantado"}})
+    return ok, inv, pv
 
 
 async def charge(company, inv):

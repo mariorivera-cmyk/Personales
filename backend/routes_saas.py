@@ -8,7 +8,8 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Body, HTTPException, Response, Request
 from core import db, find, one, uid, now_iso, today, insert, clean, audit, hash_pw, check_pw, make_token, get_user, super_admin, guard, ctx
 from billing import (DEFAULT_SETTINGS, psettings, breakdown, monthly_value, create_invoice, charge, mark_paid, prorate_module,
-                     run_billing, statement, invoice_pdf, cycle_items, METHODS, account_statement, account_statement_pdf)
+                     statement, invoice_pdf, cycle_items, METHODS, account_statement, account_statement_pdf,
+                     advance_preview, advance_charge)
 
 r = APIRouter(prefix="/api")
 BLOCKED = {"paused": "La cuenta de su empresa está en pausa. Comuníquese con soporte de SalonFlow.",
@@ -304,9 +305,33 @@ async def admin_statement(cid: str, u=Depends(super_admin)):
     return {**await statement(c), "history": await find("plan_history", {"company_id": cid}, [("created_at", -1)])}
 
 
-@r.post("/admin/billing/run")
-async def billing_run(u=Depends(super_admin)):
-    return await run_billing()
+@r.get("/admin/companies/{cid}/advance-charge")
+async def advance_charge_preview(cid: str, u=Depends(super_admin)):
+    c = await one("companies", {"id": cid})
+    if not c:
+        raise HTTPException(404, "Empresa no encontrada")
+    return await advance_preview(c)
+
+
+@r.post("/admin/companies/{cid}/advance-charge")
+async def advance_charge_run(cid: str, body: dict = Body(default={}), u=Depends(super_admin)):
+    c = await one("companies", {"id": cid})
+    if not c:
+        raise HTTPException(404, "Empresa no encontrada")
+    if body.get("confirm") is not True:
+        raise HTTPException(400, "Confirme el cobro adelantado")
+    if c["status"] not in ("active", "trial"):
+        raise HTTPException(400, "Solo se puede cobrar por adelantado a empresas activas o en prueba")
+    if not c.get("card"):
+        raise HTTPException(400, "La empresa no tiene tarjeta registrada; registre un pago manual en su lugar")
+    if await one("invoices", {"company_id": cid, "status": {"$in": ["pending", "failed"]}}):
+        raise HTTPException(400, "La empresa tiene facturas pendientes; cóbrelas primero")
+    ok, inv, pv = await advance_charge(c)
+    await history(cid, u, f"Cobro adelantado {inv['currency']} {inv['total']:,.2f} periodo {pv['period_from']} a {pv['period_to']}: {'aprobado' if ok else 'rechazado'}")
+    await audit(u, cid, "advance_charge", "invoice", f"{inv['number']} {ok}")
+    if not ok:
+        raise HTTPException(402, "La tarjeta fue rechazada. No se realizó el cobro y el estado de la empresa no cambió.")
+    return {"ok": True, "invoice": inv["number"], "total": inv["total"], "next_billing_date": pv["period_to"]}
 
 
 @r.get("/admin/payments")
