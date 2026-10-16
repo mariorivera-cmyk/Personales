@@ -21,6 +21,8 @@ async def context_for(company, phone):
     appts = await find("appointments", {"company_id": cid, "client_phone": phone, "date": {"$gte": today()},
                                         "status": {"$in": ["pending", "confirmed"]}}) if client else []
     recs = await E.recommendations(cid, client["id"]) if client else []
+    last = await db.appointments.find_one({"company_id": cid, "client_phone": phone, "status": "completed"}, {"_id": 0},
+                                          sort=[("date", -1), ("time", -1)]) if client else None
     names = {s["id"]: s["name"] for s in services}
     return {
         "salon": company["name"], "hoy": f"{today()} ({local_now().strftime('%A %H:%M')})",
@@ -30,7 +32,10 @@ async def context_for(company, phone):
         "estilistas": [{"id": s["id"], "nombre": s["name"], "sucursal_id": s["branch_id"], "especialidades": s.get("specialties", "")} for s in stylists],
         "reglas_venta": [{"tipo": "cross-selling" if x["type"] == "cross" else "upselling", "si_reserva": names.get(x["trigger_service_id"]),
                           "sugerir_id": x["suggested_service_id"], "sugerir": names.get(x["suggested_service_id"]), "mensaje": x.get("message", "")} for x in rules],
-        "cliente": {"nombre": client["name"], "puntos": client.get("points", 0)} if client else "Cliente nuevo (pide su nombre)",
+        "cliente": {"nombre": client["name"], "puntos": client.get("points", 0),
+                    "ultimo_estilista": {"id": last["stylist_id"], "nombre": last["stylist_name"], "sucursal_id": last["branch_id"],
+                                         "servicio": last["service_name"], "fecha": last["date"]} if last else None}
+        if client else "Cliente nuevo (pide su nombre)",
         "citas_futuras": [{"id": a["id"], "servicio": a["service_name"], "fecha": a["date"], "hora": a["time"], "estilista": a["stylist_name"],
                            "sucursal": a["branch_name"], "estado": a["status"]} for a in appts],
         "recomendaciones": [x["message"] for x in recs], "moneda": company.get("currency", "GTQ"),
@@ -60,7 +65,8 @@ Reglas:
 5. Antes de confirmar una reserva, si hay reglas_venta para ese servicio, sugiere UNA vez el servicio complementario o premium.
 6. Si el cliente responde CONFIRMAR, REPROGRAMAR o CANCELAR a un recordatorio, actúa sobre su cita futura más próxima.
 7. Muestra máximo 6 horarios por mensaje. Nunca inventes precios ni horarios.
-8. Antes de consultar disponibilidad para una NUEVA cita, pregunta SIEMPRE al cliente si tiene un estilista de preferencia (menciona los estilistas de la sucursal que hacen ese servicio) o si prefiere que le asignemos a alguien según disponibilidad. Si elige un estilista, usa su stylist_id en availability y book; si prefiere asignación, omite stylist_id y usa el estilista que devuelva el horario elegido. Si el cliente ya lo indicó en su mensaje, no vuelvas a preguntar."""
+8. Antes de consultar disponibilidad para una NUEVA cita, pregunta SIEMPRE al cliente si tiene un estilista de preferencia (menciona los estilistas de la sucursal que hacen ese servicio) o si prefiere que le asignemos a alguien según disponibilidad. Si elige un estilista, usa su stylist_id en availability y book; si prefiere asignación, omite stylist_id y usa el estilista que devuelva el horario elegido. Si el cliente ya lo indicó en su mensaje, no vuelvas a preguntar.
+9. Si el cliente tiene ultimo_estilista y ese estilista está en la sucursal y realiza el servicio solicitado, propónlo PRIMERO por su nombre (ej. "¿Desea agendar nuevamente con Carla, quien le atendió la última vez?") y ofrece como alternativa elegir otro estilista o la asignación según disponibilidad. Si no realiza ese servicio o no está en esa sucursal, aplica la regla 8 normalmente."""
 
 
 def parse(text):
