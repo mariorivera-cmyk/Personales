@@ -89,6 +89,7 @@ export function Alerts() {
 export function TemplatesButton({ onDone }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
+  const { checkSetup } = useAuth();
   const load = async () => { const r = await api.get("/service-templates"); setItems(r.data.map((x) => ({ ...x, on: false }))); setOpen(true); };
   const save = async () => {
     const sel = items.filter((x) => x.on);
@@ -96,6 +97,7 @@ export function TemplatesButton({ onDone }) {
     toast.success(`${sel.length} servicios creados`);
     setOpen(false);
     onDone?.();
+    checkSetup();
   };
   const set = (i, k, v) => setItems(items.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
   return (

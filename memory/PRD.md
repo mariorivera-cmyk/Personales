@@ -57,6 +57,7 @@ Super Administrador, Administrador de Empresa, Gerente de Sucursal, Recepcionist
 ## Implemented (2026-10-16) — Arranque obligatorio para salones nuevos
 - Mientras no se completen los 4 pasos obligatorios (servicios, estilistas, datos del salón + direcciones, reglas), el menú muestra solo Dashboard, Servicios, Sucursales, Estilistas, Configuración y Mi suscripción; otras rutas redirigen; portal público y bot de WhatsApp quedan en pausa. Al terminar se marca setup_complete (permanente) y se desbloquea al instante.
 - "Guardar y confirmar reglas" permite aceptar las reglas sugeridas. Salones existentes completos se marcaron automáticamente. Probado: iteration_6 y 7.
+- Desbloqueo progresivo (2026-10-16): durante la configuración el menú muestra solo la guía + las páginas de los pasos completados y del paso actual (1 Servicios → 2 Estilistas → 3 Configuración/Sucursales → 4 Reglas); pasos siguientes bloqueados en la guía. Probado: iteration_8.
 
 ## Backlog
 - P0: Conectar WhatsApp Cloud API real (token + phone number id por empresa); pasarela Recurrente; FEL con INFILE/Digifact.

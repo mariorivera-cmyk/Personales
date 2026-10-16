@@ -59,7 +59,7 @@ export default function Layout() {
   if (user === null) return <div className="grid h-screen place-items-center text-muted-foreground">Cargando...</div>;
   if (!user) return <Navigate to="/login" replace />;
   const isSA = user.role === "super_admin";
-  const setup = !!company && !company.setup_complete && !isSA;
+  const setup = !!company && !company.setup_complete && !isSA && !setupInfo?.setup_complete;
   const SETUP_PATHS = setupPaths(setupInfo?.current);
   if (setup && setupInfo && loc.pathname.startsWith("/app") && !SETUP_PATHS.includes(loc.pathname)) return <Navigate to="/app" replace />;
   const items = COMPANY_NAV.filter((n) => (isSA || n.roles.includes(user.role)) && (!n.mod || (company?.enabled_modules || []).includes(n.mod)) && (!setup || SETUP_PATHS.includes(n.to)));

@@ -32,6 +32,7 @@ export function AuthProvider({ children }) {
     const { data } = await api.post("/auth/login", { email, password });
     localStorage.setItem("token", data.token);
     localStorage.removeItem("company_ctx");
+    setSetup(null);
     await refresh();
     return data.user;
   };
@@ -41,6 +42,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("company_ctx");
     setUser(false);
     setCompany(null);
+    setSetup(null);
   };
   const enterCompany = async (id) => {
     if (id) localStorage.setItem("company_ctx", id);

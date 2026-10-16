@@ -1,0 +1,31 @@
+{
+  "summary": "Tested progressive setup unlock end-to-end via UI (/signup, 3 TEST_ salons) plus API. Initial state: only Dashboard + Servicios + setup-nav-note are shown; /app/estilistas, /app/config, /app/sucursales, /app/agenda, /app/facturacion redirect to /app; the guide shows 'Paso 1 de 4' with onboarding-link-services and the later steps locked (no links). BUG FOUND AND FIXED: creating services through 'Usar plantillas' did not unlock Estilistas without a reload, because TemplatesButton.save never called checkSetup (only the CrudPage manual save did). After the fix, both the templates and manual paths show the 'Paso completado' toast and Estilistas appears. After adding a stylist, Configuración and Sucursales appear (Paso 3). Saving only the description keeps step 3; adding the branch address moves to rules (Paso 4) and the toast shows. Clicking 'Guardar y confirmar reglas' unlocks the full nav (16 items), shows the '¡Su salón está configurado!' toast, hides the note, shows the portal link, and /app/agenda becomes accessible. Bellavida is unaffected (19 nav items, no note). GET /api/onboarding current goes services→stylists→salon→rules→null (pytest 2/2).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "TemplatesButton (Onboarding.jsx)", "issue": "FIXED by testing agent: 'Usar plantillas' save did not call checkSetup, so the sidebar did not unlock Estilistas until reload", "selector": "[data-testid='templates-save']", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Rules confirm -> setup complete", "issue": "Minor: after 'Guardar y confirmar reglas', the user is bounced from /app/config?tab=reglas to /app. For a moment setupInfo.current=null while company.setup_complete is still false, so setupPaths(null) returns ['/app'] and Layout redirects. This is acceptable since the dashboard shows the completed guide, but it is unintended.", "affected_selectors": ["[data-testid='rules-save-btn']"]}
+    ],
+    "design_issues": [
+      {"screen": "Sidebar during setup", "issues": ["After step 2 the order is Servicios, Sucursales, Estilistas, Configuración (COMPANY_NAV order), not the guide order (Servicios, Estilistas, Configuración, Sucursales). This is cosmetic."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_progressive_unlock.py", "/app/test_reports/pytest/pytest_progressive.xml"],
+  "action_items": [
+    "Review the checkSetup fix added in TemplatesButton (Onboarding.jsx)",
+    "Optional: in Layout, skip the redirect when setupInfo.setup_complete is true (or when current is null) to avoid bouncing the user from the rules page to /app",
+    "Optional: reset the setup state on logout/login in Auth.jsx so stale setup data does not carry over between accounts"
+  ],
+  "critical_code_review_comments": [
+    "Auth.jsx: setup state is not cleared on logout. If two incomplete salons log in one after another in the same tab, the first salon's 'current' is briefly applied to the second salon's paths.",
+    "Layout.jsx: while setupInfo is null, items are filtered to only Dashboard (setupPaths(undefined)), so the sidebar flickers briefly. This is harmless."
+  ],
+  "updated_files": ["/app/frontend/src/components/Onboarding.jsx", "/app/backend/tests/test_progressive_unlock.py"],
+  "success_rate": {"backend": "100%", "frontend": "100% after fix (templates path failed before fix)"},
+  "seed_data_creation": "TEST_Prog/Prog2/Prog3/Prog API salons were created and deleted via tests/cleanup_v2.py. bellavida, salon-retest-trinity and wwwpruebacom are intact.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Progressive unlock is verified. Use tests/test_progressive_unlock.py for API regression and tests/cleanup_v2.py for cleanup of TEST_ data."
+}
