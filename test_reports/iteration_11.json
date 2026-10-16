@@ -1,0 +1,37 @@
+{
+  "summary": "Tested the per-company advance charge (Cobro adelantado) and the removal of the global billing run. Backend: 16/16 pytest tests pass. UI: all requested flows pass. Run-billing button is gone from /admin and POST /api/admin/billing/run returns 404/405. Preview periods are correct: active uses next_billing_date, trial uses trial_ends, past dates move to today, +30 days monthly, +365 annual. Validations work: 400 without confirm, 400 for paused/cancelled/past_due, 400 with no card, 400 with pending invoices, 403 for non super admin. On success: advance invoice is paid with period_from/period_to, card payment approved, next_billing_date = period_to, trial company becomes active, history shows 'Cobro adelantado ... aprobado', statement balance 0 with charge and payment rows. Card 0002: 402, invoice void, payment rejected, status and next_billing_date unchanged (not past_due), void invoice does not block a retry. One real bug found: concurrent POSTs charge more than once.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/admin/companies/{cid}/advance-charge", "issue": "No lock or idempotency. 3 concurrent POSTs with confirm:true all returned 200 and created 3 paid advance invoices and 3 approved card charges for the same period. The UI busy flag only protects one browser tab. Fix: atomically claim a per-company lock (e.g. find_one_and_update with advance_lock:null -> set) or a unique index on (company_id, kind:'advance', period_from), or accept an idempotency key.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/admin/companies/{cid}/advance-charge", "issue": "Repeated calls one after another each charge the next period (from the new next_billing_date) with no limit. This may be intended, but a second confirmation could warn when the company is already paid ahead."},
+      {"endpoint": "billing.create_invoice", "issue": "Invoice number uses count_documents({})+1, so numbers are reused after invoices are deleted (e.g. a company purge). FAC-000003 was issued again here after earlier test cleanup. This was already there before this change. Use an atomic counter instead."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Advance charge rejected (card 0002)", "issue": "After the 402 the dialog stays open with the error toast (fine), but onDone is not called. The company panel does not refresh, so the new 'rechazado' history entry and the void invoice only appear after a reload.", "affected_selectors": ["advance-confirm"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_advance_charge.py", "/app/backend/tests/race_advance.py", "/app/backend/tests/ui_adv_seed.py", "/app/test_reports/pytest/pytest_advance.xml"],
+  "action_items": [
+    "Make advance-charge safe against concurrent requests (atomic lock or idempotency), see critical issue",
+    "Optional: call onDone/load() after a rejected advance charge so history and invoices refresh",
+    "Optional: replace count-based invoice numbering with an atomic sequence"
+  ],
+  "critical_code_review_comments": [
+    "routes_saas.advance_charge_run: the pending-invoice check and the charge are not atomic, so requests can race",
+    "billing.mark_paid advance branch uses the stale company dict status, but works because the trial check runs before the update",
+    "AdvanceCharge.jsx: confirm button is correctly disabled until the checkbox is checked and when there is no card; the checkbox resets when the dialog reopens"
+  ],
+  "updated_files": ["/app/backend/tests/test_advance_charge.py", "/app/backend/tests/race_advance.py", "/app/backend/tests/ui_adv_seed.py"],
+  "success_rate": {"backend": "100% (16/16); concurrency check failed", "frontend": "100%"},
+  "seed_data_creation": "TEST_Adv companies created and deleted, along with their invoices and payments. 0 left over. bellavida and user companies were not charged.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest backend/tests/test_advance_charge.py. Race check: python backend/tests/race_advance.py (expected: only one 200 and 1 paid advance invoice). Old backend_test.py still calls /admin/billing/run, which is now removed, so that failure is expected.",
+  "rca of the issue": "Double charge: advance_charge_run reads the company, checks for open invoices, then creates the invoice and payment with no atomic guard. Concurrent requests all pass the checks before any invoice exists. Reproduce: 3 threaded POSTs with confirm:true. Fix: atomic per-company lock or unique-index idempotency."
+}

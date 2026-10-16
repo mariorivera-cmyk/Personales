@@ -62,7 +62,12 @@ async def create_invoice(company, items, kind="subscription"):
     s = await psettings()
     sub = round(sum(i["amount"] for i in items), 2)
     tax = round(sub * float(s.get("tax_rate", 12)) / 100, 2)
-    n = await db.invoices.count_documents({}) + 1
+    seq = await db.counters.find_one_and_update({"id": "invoice"}, {"$inc": {"n": 1}}, upsert=True, return_document=True)
+    if seq["n"] == 1:
+        nums = [int(x["number"].split("-")[-1]) for x in await db.invoices.find({}, {"number": 1, "_id": 0}).to_list(100000) if x.get("number", "").split("-")[-1].isdigit()]
+        last = max(nums or [0])
+        seq = await db.counters.find_one_and_update({"id": "invoice"}, {"$inc": {"n": last}}, return_document=True)
+    n = seq["n"]
     plan = await one("plans", {"id": company.get("plan_id")}) or {}
     inv = {"id": uid(), "company_id": company["id"], "company_name": company["name"], "nit": company.get("nit") or "CF",
            "number": f"FAC-{n:06d}", "date": today(), "items": items, "subtotal": sub, "tax": tax, "total": round(sub + tax, 2),
@@ -103,6 +108,7 @@ async def advance_preview(company):
     tax = round(sub * float(s.get("tax_rate", 12)) / 100, 2)
     card = company.get("card") or {}
     return {"period_from": start, "period_to": advance(start, company.get("billing_cycle")), "items": items, "subtotal": sub, "tax": tax,
+            "paid_ahead": (company.get("next_billing_date") or "") > advance(today(), company.get("billing_cycle")),
             "total": round(sub + tax, 2), "currency": company.get("currency", "GTQ"), "card_last4": card.get("last4"),
             "cycle": company.get("billing_cycle") or "monthly"}
 

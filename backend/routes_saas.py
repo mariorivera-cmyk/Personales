@@ -324,9 +324,15 @@ async def advance_charge_run(cid: str, body: dict = Body(default={}), u=Depends(
         raise HTTPException(400, "Solo se puede cobrar por adelantado a empresas activas o en prueba")
     if not c.get("card"):
         raise HTTPException(400, "La empresa no tiene tarjeta registrada; registre un pago manual en su lugar")
-    if await one("invoices", {"company_id": cid, "status": {"$in": ["pending", "failed"]}}):
-        raise HTTPException(400, "La empresa tiene facturas pendientes; cóbrelas primero")
-    ok, inv, pv = await advance_charge(c)
+    lock = await db.companies.find_one_and_update({"id": cid, "advance_lock": {"$in": [None, False]}}, {"$set": {"advance_lock": True}})
+    if not lock:
+        raise HTTPException(409, "Ya hay un cobro adelantado en proceso para esta empresa")
+    try:
+        if await one("invoices", {"company_id": cid, "status": {"$in": ["pending", "failed"]}}):
+            raise HTTPException(400, "La empresa tiene facturas pendientes; cóbrelas primero")
+        ok, inv, pv = await advance_charge(await one("companies", {"id": cid}))
+    finally:
+        await db.companies.update_one({"id": cid}, {"$set": {"advance_lock": False}})
     await history(cid, u, f"Cobro adelantado {inv['currency']} {inv['total']:,.2f} periodo {pv['period_from']} a {pv['period_to']}: {'aprobado' if ok else 'rechazado'}")
     await audit(u, cid, "advance_charge", "invoice", f"{inv['number']} {ok}")
     if not ok:

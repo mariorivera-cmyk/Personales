@@ -13,7 +13,7 @@ export function AdvanceChargeButton({ company, onDone }) {
   const go = async () => {
     setBusy(true);
     try { const r = await api.post(`/admin/companies/${company.id}/advance-charge`, { confirm: true }); toast.success(`Cobro aprobado: factura ${r.data.invoice}. Próximo cobro: ${r.data.next_billing_date}`); setPv(null); onDone(); }
-    catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
+    catch (e) { toast.error(errMsg(e)); onDone(); } finally { setBusy(false); }
   };
   const allowed = ["active", "trial"].includes(company.status);
   return (<>
@@ -29,6 +29,7 @@ export function AdvanceChargeButton({ company, onDone }) {
           <div className="flex justify-between border-t pt-1 font-semibold"><span>Total</span><span data-testid="advance-total">{money(pv.total, pv.currency)}</span></div>
           <div className="text-xs text-muted-foreground">El próximo cobro automático pasará al {pv.period_to}.</div>
         </div>
+        {pv.paid_ahead && <p className="text-sm font-medium text-amber-800" data-testid="advance-paid-ahead">Atención: esta empresa ya tiene pagado por adelantado hasta el {pv.period_from}. Este cobro agregaría otro periodo más.</p>}
         {!pv.card_last4 && <p className="text-sm font-medium text-rose-700" data-testid="advance-no-card">La empresa no tiene tarjeta registrada. Use «Registrar pago» si pagó por otro medio.</p>}
         <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={ok} onChange={(e) => setOk(e.target.checked)} data-testid="advance-confirm-check" />Confirmo que deseo realizar este cobro ahora.</label>
         <div className="flex justify-end gap-2">
