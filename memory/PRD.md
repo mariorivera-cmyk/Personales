@@ -49,6 +49,11 @@ Super Administrador, Administrador de Empresa, Gerente de Sucursal, Recepcionist
 - D4 texto "Hoy ya no hay turnos". D5 título "Reserva pendiente de anticipo" + plazo. D6 comisiones por fecha de cobro y rango del periodo completo + mensaje vacío. D7 aviso "Existencia baja: Nombre (x/min)". D8 enlace del registro respetado / sugerencias. D9 producto nuevo aparece en venta sin recargar. D10 advertencia precio < costo.
 - Probado: iteration_4.
 
+## Implemented (2026-10-16) — Categorías, servicios por estilista, plantillas
+- Categorías de servicio administrables (crear, renombrar → actualiza servicios, eliminar solo si no se usan; sin duplicados). Campo Categoría del servicio ahora es selección. Se importan automáticamente las existentes; las plantillas crean las que falten.
+- Estilistas: campo "Servicios que realiza" (varios). Disponibilidad filtra por él; si el servicio tenía lista de autorizados, se agrega la estilista automáticamente.
+- Checkboxes más grandes en plantillas y selecciones múltiples (etiqueta clicable). Probado: iteration_5 + verificación de correcciones.
+
 ## Backlog
 - P0: Conectar WhatsApp Cloud API real (token + phone number id por empresa); pasarela Recurrente; FEL con INFILE/Digifact.
 - P1: Cobro de anticipos a clientes finales (sección 7); emails reales (Resend); subdominio por empresa; object storage para archivos.

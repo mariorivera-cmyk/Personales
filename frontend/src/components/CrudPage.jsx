@@ -115,7 +115,7 @@ export function FieldInput({ field, value, onChange }) {
         {!opts.length && <span className="text-xs text-muted-foreground">Aún no hay opciones registradas</span>}
         {opts.map((o) => (
           <label key={o.value} className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-secondary">
-            <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" data-testid={`${id}-${o.value}`} checked={(value || []).includes(o.value)}
+            <input type="checkbox" className="h-5 w-5 cursor-pointer accent-[hsl(var(--primary))]" data-testid={`${id}-${o.value}`} checked={(value || []).includes(o.value)}
               onChange={(e) => onChange(e.target.checked ? [...(value || []), o.value] : (value || []).filter((x) => x !== o.value))} />
             {o.label}
           </label>

@@ -1,0 +1,34 @@
+{
+  "summary": "Tested service categories CRUD (API + UI), category select in service form, auto-import, templates creating categories, bigger template checkboxes + label toggle, stylist service_ids multi field + availability filtering, receptionist 403. Backend 7/8 pytest pass (1 minor bug: rename duplicate check is case-sensitive). UI flows all working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/service-categories/{id}", "issue": "Duplicate check on rename is exact-match (case-sensitive) while POST is case-insensitive. Renaming 'X' to 'color' when 'Color' exists returns 200 and creates a near-duplicate. Fix: use the same ^name$ regex with $options:'i' and exclude the current id (routes_extra.py line ~223)."},
+      {"endpoint": "ensure_category / GET /api/service-categories", "issue": "ensure_category matches name exactly, so a service with category 'color' alongside existing 'Color' auto-creates a duplicate category on GET. Also GET does N+1 queries (ensure per service + count per category) — acceptable for small catalogs."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Estilistas form - Servicios que realiza", "issues": ["Restriction is AND with the service's 'Estilistas autorizados' list: selecting e.g. 'Corte de cabello' on a new stylist does NOT make them bookable because Corte has stylist_ids=[Diego, ...]. Verified: new stylist with service_ids=[Corte,Tinte] got 0 slots for both. Consider a hint in the form, or auto-adding the stylist to service.stylist_ids when picked, or disabling/flagging services that do not authorize this stylist."]},
+      {"screen": "CrudPage multi field", "issues": ["Multi checkboxes in service/stylist forms still h-4 w-4 (only templates were enlarged to h-5) — consider consistency with the user's 'checkboxes too small' complaint."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_categories_stylist_services.py", "/app/test_reports/pytest/pytest_iter5.xml"],
+  "action_items": [
+    "Make rename duplicate check case-insensitive (and exclude self) in PUT /api/service-categories/{id}",
+    "Optionally make ensure_category case-insensitive to avoid duplicate auto-imported categories",
+    "Clarify/handle interaction between stylist.service_ids and service.stylist_ids in the Estilistas form"
+  ],
+  "critical_code_review_comments": [
+    "routes_extra.py create_category uses __import__('re') inline — import re at module top",
+    "Onboarding TemplatesButton uses id tpl-{i}; if two TemplatesButton instances render on the same page, label htmlFor ids collide"
+  ],
+  "updated_files": ["/app/backend/tests/test_categories_stylist_services.py"],
+  "success_rate": {"backend": "88% (7/8)", "frontend": "100%"},
+  "seed_data_creation": "None persisted. All TEST_ categories/services/stylists deleted; no seeded stylist service_ids changed (verified none have non-empty service_ids).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Verified UI: categories dialog create/dup toast 'Esa categoría ya existe'/rename/delete-in-use toast 'No se puede eliminar: N servicio(s)...'; field-category select lists new category; service row shows category; template checkbox 20x20 and label toggles; stylist field-service_ids saves and re-loads. Seeded services Corte/Tinte have stylist_ids restrictions, so use new unrestricted TEST_ services when testing stylist.service_ids slot filtering."
+}

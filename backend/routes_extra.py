@@ -1,4 +1,5 @@
 import io
+import re
 import base64
 from fastapi import APIRouter, Depends, Body, HTTPException, UploadFile, File, Response
 from core import (db, find, one, uid, now_iso, today, insert, audit, guard, wa_send, norm_phone, portal_url, notify_company,
@@ -186,9 +187,13 @@ async def service_templates(c=Depends(guard(("company_admin",)))):
     return [{"name": n, "category": cat, "duration": d, "price": round(p * f, 2)} for n, cat, d, p in TEMPLATES]
 
 
+def cat_q(cid, name):
+    return {"company_id": cid, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}
+
+
 async def ensure_category(cid, name):
     name = (name or "").strip()
-    if name and not await one("service_categories", {"company_id": cid, "name": name}):
+    if name and not await one("service_categories", cat_q(cid, name)):
         await insert("service_categories", {"id": uid(), "company_id": cid, "name": name, "created_at": now_iso()})
 
 
@@ -207,7 +212,7 @@ async def create_category(body: dict = Body(...), c=Depends(guard(("company_admi
     name = (body.get("name") or "").strip()
     if not name:
         raise HTTPException(400, "Escriba el nombre de la categoría")
-    if await one("service_categories", {"company_id": c["cid"], "name": {"$regex": f"^{__import__('re').escape(name)}$", "$options": "i"}}):
+    if await one("service_categories", cat_q(c["cid"], name)):
         raise HTTPException(400, "Esa categoría ya existe")
     await ensure_category(c["cid"], name)
     await audit(c["user"], c["cid"], "create", "service-categories", name)
@@ -220,7 +225,7 @@ async def rename_category(oid: str, body: dict = Body(...), c=Depends(guard(("co
     name = (body.get("name") or "").strip()
     if not cat or not name:
         raise HTTPException(400, "Escriba el nombre de la categoría")
-    if name != cat["name"] and await one("service_categories", {"company_id": c["cid"], "name": name}):
+    if await one("service_categories", {**cat_q(c["cid"], name), "id": {"$ne": oid}}):
         raise HTTPException(400, "Esa categoría ya existe")
     await db.service_categories.update_one({"id": oid}, {"$set": {"name": name}})
     await db.services.update_many({"company_id": c["cid"], "category": cat["name"]}, {"$set": {"category": name}})

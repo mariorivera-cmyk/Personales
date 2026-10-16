@@ -8,7 +8,7 @@ import engine as E
 r = APIRouter(prefix="/api")
 
 
-def crud(name, coll, write=("company_admin",), mod=None, create=True, before=None):
+def crud(name, coll, write=("company_admin",), mod=None, create=True, before=None, after=None):
     @r.get(f"/{name}", name=f"list_{name}")
     async def _list(c=Depends(guard(None, mod))):
         return await find(coll, {"company_id": c["cid"]}, [("created_at", 1)])
@@ -20,13 +20,19 @@ def crud(name, coll, write=("company_admin",), mod=None, create=True, before=Non
                 await before(c, body)
             doc = {**clean(body), "id": uid(), "company_id": c["cid"], "created_at": now_iso()}
             await audit(c["user"], c["cid"], "create", name, doc.get("name", doc["id"]))
-            return await insert(coll, doc)
+            out = await insert(coll, doc)
+            if after:
+                await after(c, out)
+            return out
 
     @r.put(f"/{name}/{{oid}}", name=f"update_{name}")
     async def _update(oid: str, body: dict = Body(...), c=Depends(guard(write, mod))):
         await db[coll].update_one({"id": oid, "company_id": c["cid"]}, {"$set": clean(body)})
         await audit(c["user"], c["cid"], "update", name, oid)
-        return await one(coll, {"id": oid})
+        out = await one(coll, {"id": oid})
+        if after and out:
+            await after(c, out)
+        return out
 
     @r.delete(f"/{name}/{{oid}}", name=f"delete_{name}")
     async def _delete(oid: str, c=Depends(guard(write, mod))):
@@ -41,8 +47,13 @@ async def branch_limit(c, body):
         raise HTTPException(403, "Habilite el módulo Multi-sucursal para agregar más sucursales")
 
 
+async def stylist_services_sync(c, st):
+    for sid in st.get("service_ids") or []:
+        await db.services.update_one({"id": sid, "company_id": c["cid"], "stylist_ids.0": {"$exists": True}}, {"$addToSet": {"stylist_ids": st["id"]}})
+
+
 crud("branches", "branches", before=branch_limit)
-crud("stylists", "stylists", write=MANAGERS)
+crud("stylists", "stylists", write=MANAGERS, after=stylist_services_sync)
 crud("services", "services")
 crud("blocks", "blocks", write=MANAGERS)
 crud("rules", "upsell_rules", mod="upsell")
