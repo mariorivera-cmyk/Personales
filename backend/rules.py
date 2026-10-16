@@ -103,7 +103,7 @@ def validate(key, v):
             raise HTTPException(400, f"«{lab}»: el mínimo es {d['min']}")
         if "max" in d and n > d["max"]:
             raise HTTPException(400, f"«{lab}»: " + ("un porcentaje no puede ser mayor a 100" if d.get("pct") else f"el máximo es {d['max']}"))
-        return int(n) if t == "int" else n
+        return int(n) if n == int(n) else n
     if t == "enum":
         opts = d["options"]
         if v not in opts and str(v) not in {str(o) for o in opts}:
@@ -142,8 +142,10 @@ def show(key, v):
         return next((lab for o, lab in d["options"].items() if str(o) == str(v)), str(v))
     if d["type"] == "multi":
         return ", ".join(d["options"].get(x, x) for x in v) or "-"
+    if isinstance(v, (int, float)):
+        return f"{v:g}"
     if isinstance(v, list):
-        return ", ".join(str(x) for x in v) or "-"
+        return ", ".join(f"{x:g}" if isinstance(x, (int, float)) else str(x) for x in v) or "-"
     return str(v)[:120]
 
 
@@ -165,7 +167,7 @@ async def save_rules(c, values, branch_id=None):
     after = effective(co, branch_id)
     scope = f"Sucursal {(await one('branches', {'id': branch_id}))['name']}" if branch_id else "General"
     for k in clean:
-        if str(before.get(k)) != str(after.get(k)):
+        if show(k, before.get(k)) != show(k, after.get(k)) or (DEFS[k]["type"] == "longtext" and before.get(k) != after.get(k)):
             await audit(c["user"], c["cid"], "rule_change", "reglas", f"[{scope}] {DEFS[k]['label']}: {show(k, before.get(k))} → {show(k, after.get(k))}")
     return co
 
@@ -233,8 +235,8 @@ async def get_rules(branch_id: str = "", c=Depends(guard(ALL_STAFF))):
 
 @r.put("/salon-rules")
 async def put_rules(body: dict = Body(...), c=Depends(guard(ADMIN))):
-    await save_rules(c, body.get("values") or {}, body.get("branch_id") or None)
-    return await get_rules(body.get("branch_id") or "", c)
+    co = await save_rules(c, body.get("values") or {}, body.get("branch_id") or None)
+    return await get_rules(body.get("branch_id") or "", {**c, "company": co})
 
 
 @r.post("/salon-rules/reset")

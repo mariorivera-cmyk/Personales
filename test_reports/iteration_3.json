@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 3 tested R21 'Panel de reglas del salón' end to end: backend (24 pytest tests, run serially) and frontend (Playwright: Configuración > Reglas del salón for admin and receptionist, branch scope, reset dialog, Auditoría tab, General tab save, onboarding step, Comisiones period, portal PolicyBox with deposit on and off). All required behaviours work: the 42-rule schema, can_edit, validation messages, the 403 for receptionist, audit entries, general and branch reset, branch overrides in the public portal and in /quote, two salons with separate policies, the rules snapshot on appointments and the late-cancel check using that snapshot, no-show tolerance (409), the no-show limit notification and lookup alert, alert_deposit and block, turning off the deposit, max_active_per_client and min/max advance for public bookings only, slot_interval, the client reschedule limits, the commission percent, the loyalty mapping, reminder hours and the policy text in confirmations. Found two real bugs, both minor: the PUT /api/salon-rules response returns stale data, and the audit log gets false 'X → X.0' entries.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/salon-rules", "issue": "The response returns the values from before the save (for example, effective.cancel_hours is still 24 right after saving 30). Cause: put_rules calls get_rules(branch, c) with c['company'] loaded before save_rules ran. The UI is not affected because it calls load() again after saving. Fix: in put_rules, set c = {**c, 'company': await save_rules(...)} before building the response."},
+      {"endpoint": "save_rules / POST /api/salon-rules/reset (rules.py)", "issue": "False audit entries. validate() always returns float for 'num' rules, and the change check compares str(before) with str(after), so 24 and 24.0 count as a change. Every general reset writes about 12 entries like '[General] Precio mínimo: 500 → 500.0'. Saving from the UI also logs '[General] Porcentaje de anticipo: 30 → 30.0', because the number input sends the string '30'. Real changes also show as '24 → 30.0'. Fix: in validate, return int(n) when n is a whole number (or compare numbers as numbers), and format numbers with :g in show()."},
+      {"endpoint": "engine.book / engine.reschedule", "issue": "occ_end uses svc.cleanup_minutes or 0, while day_slots uses the default_cleanup_min rule when a service has no cleanup time. For services with empty cleanup_minutes, the stored occupied interval leaves out the default cleanup, so other bookings can overlap it. Seed services all have cleanup set, so this does not show up today."},
+      {"endpoint": "routes_wa context_for (politicas_del_salon)", "issue": "The WhatsApp bot context uses R.effective(company) with no branch, so branch-specific rules (for example cancel_hours for one branch) are not reflected in what the bot answers."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Portal PolicyBox / Confirmar reserva", "issue": "When quote.blocked is true the warning shows, but portal-book-btn is still enabled. The client can submit and only then gets a 409 toast. Consider disabling the button when quote.blocked is true.", "selector": "[data-testid='portal-book-btn']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Configuración (receptionist)", "issues": ["The receptionist still sees the 'Auditoría' and 'Usuarios y roles' tabs, but GET /api/audit is company_admin only. Hide tabs the role cannot use."]},
+      {"screen": "Portal date picker", "issues": ["Uses the browser's native <input type='date'> instead of the shadcn Calendar (this was already the case before)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_salon_rules.py", "/app/test_reports/pytest/pytest_rules.xml"],
+  "action_items": [
+    "Fix the stale PUT /api/salon-rules response (pass the updated company to get_rules).",
+    "Normalize numbers in rules.validate/show (store whole numbers as int, display with :g) and compare numbers as numbers in save_rules, so reset and unchanged saves stop writing 'X → X.0' audit entries.",
+    "In book/reschedule, use the default_cleanup_min rule for occ_end when the service has no cleanup_minutes.",
+    "Optional: disable 'Confirmar reserva' when quote.blocked is true; hide the Auditoría tab from non-admins; pass branch rules to the WhatsApp context."
+  ],
+  "critical_code_review_comments": [
+    "rules.py put_rules returns get_rules built from the company loaded before the save (stale response).",
+    "rules.validate returns float for every 'num' rule, so stored values become 30.0 and audit text shows '30.0'; str() comparison creates false change entries.",
+    "engine.book occ_end ignores the default_cleanup_min rule (does not match day_slots).",
+    "rules.reset_rules (general) runs save_rules on all 42 suggested values just to write the audit, then overwrites rules to {}. This works, but it causes the noise above."
+  ],
+  "updated_files": ["/app/backend/tests/test_salon_rules.py"],
+  "success_rate": {"backend": "100% of 24 tests passed (4 minor bugs found by code review and observation)", "frontend": "100% of tested flows (1 low-priority UI issue)"},
+  "test_credentials": "admin@bellavida.com / Demo2026!, recepcion@bellavida.com / Demo2026! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None kept. A TEST_ second company (via signup), TEST_ clients and appointments were created and then deleted. Bellavida rules were restored: rules {} and both branch_rules {}.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run with: pytest /app/backend/tests/test_salon_rules.py -n 0. It must run serially: the tests change shared company rules and xdist parallel runs make them interfere. The fixture resets bellavida rules before and after the run and deletes TEST_ data. Container date is 2026-10-15 (America/Guatemala). The no-show test shifts appointment date and time in Mongo to the past. Upsell CRUD is at /api/rules; salon rules are at /api/salon-rules."
+}

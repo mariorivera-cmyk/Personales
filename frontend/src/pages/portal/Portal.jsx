@@ -225,13 +225,13 @@ export default function Portal() {
                 <div className="text-lg font-bold" data-testid="portal-total">{money(total, cur)}</div>
               </div>
               <PolicyBox quote={quote} cur={cur} />
-              <Button className="w-full rounded-full" disabled={busy || !pick || !f.name || !phoneOk} onClick={book} data-testid="portal-book-btn">{busy ? "Reservando..." : "Confirmar reserva"}</Button>
+              <Button className="w-full rounded-full" disabled={busy || !pick || !f.name || !phoneOk || quote?.blocked} onClick={book} data-testid="portal-book-btn">{busy ? "Reservando..." : "Confirmar reserva"}</Button>
               <p className="text-center text-xs text-muted-foreground">Al confirmar acepta los <a href="#terminos" onClick={(e) => { e.preventDefault(); document.querySelector("[data-testid=footer-terms]")?.click(); }} className="underline" data-testid="portal-terms-link">términos y la política de privacidad</a>.</p>
             </aside>
           </div>
           <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between border-t bg-white px-6 py-3 lg:hidden" data-testid="mobile-summary-bar">
             <span className="text-sm font-semibold">{money(total, cur)}{pick ? ` · ${pick.time}` : ""}</span>
-            <Button size="sm" className="rounded-full" disabled={busy || !pick || !f.name || !phoneOk} onClick={book}>Confirmar</Button>
+            <Button size="sm" className="rounded-full" disabled={busy || !pick || !f.name || !phoneOk || quote?.blocked} onClick={book}>Confirmar</Button>
           </div>
         </>)}
         <div className="mt-12 space-y-12"><SalonInfo salon={salon} /><MyAccount slug={slug} onRepeat={repeat} /></div>

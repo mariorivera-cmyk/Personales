@@ -38,6 +38,12 @@ Super Administrador, Administrador de Empresa, Gerente de Sucursal, Recepcionist
 - R15 Cuenta cliente (historial, Repetir, puntos, solicitud de borrado). R16 Reseñas por enlace + galería + moderación + aviso calificación baja.
 - R17 Inventario, venta mostrador, consumo por servicio, alertas. R18 Google Calendar + .ics. R19 Pie con términos/privacidad editables. R20 Alerta sucursal sin dirección.
 
+## Implemented R21 (2026-10-16) — Panel de reglas del salón
+- backend/rules.py: 42 reglas (grupos A–F) con valor sugerido único (ajustable por país), general + por sucursal (herencia), validación con mensajes claros, auditoría antes→después, restaurar sugeridos, solo admin edita. API /api/salon-rules (upsell sigue en /api/rules).
+- Cada cita guarda copia de reglas (appointments.rules); cancelación tardía, reprogramación, recordatorios y reembolso usan esa copia.
+- Aplicadas en: horarios (intervalo, limpieza, anticipación mín/máx solo en línea), anticipo (condiciones, % o fijo, plazo, datos bancarios, reembolso), faltas (periodo, límite, alerta/anticipo/bloqueo, tolerancia), máx citas activas, comisiones (modelo, %, propinas, periodo), puntos, recordatorios (horas, canal, alternativa), portal (/quote), confirmaciones y asistente WhatsApp.
+- Pestaña Configuración › Reglas del salón; paso en guía de arranque. Probado: iteration_3 (24 tests backend + UI).
+
 ## Backlog
 - P0: Conectar WhatsApp Cloud API real (token + phone number id por empresa); pasarela Recurrente; FEL con INFILE/Digifact.
 - P1: Cobro de anticipos a clientes finales (sección 7); emails reales (Resend); subdominio por empresa; object storage para archivos.

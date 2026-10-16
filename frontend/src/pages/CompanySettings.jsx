@@ -78,11 +78,13 @@ function Audit() {
 
 export default function CompanySettings() {
   const [params, setParams] = useSearchParams();
+  const { user } = useAuth();
+  const admin = ["company_admin", "super_admin"].includes(user?.role);
   return (
     <div data-testid="settings-page">
       <PageHeader title="Configuración" subtitle="Empresa, usuarios y trazabilidad" />
       <Tabs value={params.get("tab") || "general"} onValueChange={(v) => setParams({ tab: v })}>
-        <TabsList className="mb-6 flex-wrap"><TabsTrigger value="general" data-testid="tab-general">General</TabsTrigger><TabsTrigger value="reglas" data-testid="tab-rules">Reglas del salón</TabsTrigger><TabsTrigger value="users" data-testid="tab-users">Usuarios y roles</TabsTrigger><TabsTrigger value="audit" data-testid="tab-audit">Auditoría</TabsTrigger></TabsList>
+        <TabsList className="mb-6 flex-wrap"><TabsTrigger value="general" data-testid="tab-general">General</TabsTrigger><TabsTrigger value="reglas" data-testid="tab-rules">Reglas del salón</TabsTrigger>{admin && <><TabsTrigger value="users" data-testid="tab-users">Usuarios y roles</TabsTrigger><TabsTrigger value="audit" data-testid="tab-audit">Auditoría</TabsTrigger></>}</TabsList>
         <TabsContent value="general"><General /></TabsContent>
         <TabsContent value="reglas"><SalonRules /></TabsContent>
         <TabsContent value="users">

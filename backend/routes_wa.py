@@ -45,6 +45,7 @@ async def context_for(company, phone):
                            "sucursal": a["branch_name"], "estado": a["status"]} for a in appts],
         "recomendaciones": [x["message"] for x in recs], "moneda": company.get("currency", "GTQ"),
         "politicas_del_salon": R.public_rules(R.effective(company)),
+        "politicas_por_sucursal": {b["id"]: R.public_rules(R.effective(company, b["id"])) for b in branches},
     }
 
 

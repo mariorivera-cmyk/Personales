@@ -37,6 +37,10 @@ def intervals(a):
     return [(a["occ_start"], a["occ_end"])]
 
 
+def cleanup_of(svc, rules):
+    return int(svc["cleanup_minutes"]) if svc.get("cleanup_minutes") not in (None, "") else int(rules["default_cleanup_min"])
+
+
 def ceil_step(x, step):
     return ((x + step - 1) // step) * step
 
@@ -81,7 +85,7 @@ async def day_slots(cid, branch_id, service_id, date, stylist_id=None, exclude=N
     appts = [a for a in appts if a["id"] != exclude]
     blocks = await find("blocks", {"company_id": cid, "start_date": {"$lte": date}, "end_date": {"$gte": date}})
     prep, dur = int(svc.get("prep_minutes") or 0), int(svc["duration"]) + extra
-    cl = int(svc["cleanup_minutes"]) if svc.get("cleanup_minutes") not in (None, "") else int(rules["default_cleanup_min"])
+    cl = cleanup_of(svc, rules)
     ps, pm = int(svc.get("pause_start") or 0), int(svc.get("pause_minutes") or 0)
     cap = int(branch.get("capacity") or 99)
     branch_appts = [a for a in appts if a["branch_id"] == branch_id]
@@ -213,7 +217,7 @@ async def book(cid, *, branch_id, service_id, date, time, phone, name=None, styl
         "client_name": client["name"], "client_phone": client["phone"], "service_id": service_id,
         "service_name": svc["name"], "addon_ids": [a["id"] for a in addons], "addon_names": [a["name"] for a in addons],
         "date": date, "time": time, "end_time": fm(start + dur), "duration": dur,
-        "occ_start": start - int(svc.get("prep_minutes") or 0), "occ_end": start + dur + int(svc.get("cleanup_minutes") or 0),
+        "occ_start": start - int(svc.get("prep_minutes") or 0), "occ_end": start + dur + cleanup_of(svc, rules),
         "price": price, "deposit_required": deposit, "deposit_paid": 0,
         "deposit_status": "pending" if deposit > 0 else None,
         "deposit_due": max(min(local_now() + timedelta(hours=float(rules["deposit_hours"])),
@@ -260,7 +264,7 @@ async def reschedule(cid, appt_id, date, time, stylist_id=None, by_client=False)
     start = m(time)
     upd = {"date": date, "time": time, "end_time": fm(start + a["duration"]), "stylist_id": match[0]["stylist_id"],
            "stylist_name": match[0]["stylist_name"], "occ_start": start - int(svc.get("prep_minutes") or 0),
-           "occ_end": start + a["duration"] + int(svc.get("cleanup_minutes") or 0), "reminders_sent": [],
+           "occ_end": start + a["duration"] + cleanup_of(svc, await appt_rules(a)), "reminders_sent": [],
            "pause": [start + int(svc.get("pause_start") or 0), start + int(svc.get("pause_start") or 0) + int(svc["pause_minutes"])] if svc.get("pause_minutes") else None,
            "status": a["status"] if a.get("deposit_status") == "pending" else "confirmed",
            "reschedule_count": int(a.get("reschedule_count") or 0) + 1}
