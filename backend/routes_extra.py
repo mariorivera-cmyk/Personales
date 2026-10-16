@@ -285,6 +285,7 @@ async def onboarding(c=Depends(guard(STAFF))):
     steps, complete = await setup_steps(co)
     ob = co.get("onboarding") or {}
     return {"steps": steps, "required": list(REQUIRED_STEPS), "setup_complete": complete,
+            "current": None if complete else next(s["key"] for s in steps if s["key"] in REQUIRED_STEPS and not s["done"]),
             "dismissed": bool(ob.get("dismissed")) and complete, "portal_url": portal_url(co["slug"])}
 
 

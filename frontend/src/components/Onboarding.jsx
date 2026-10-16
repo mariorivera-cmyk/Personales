@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
-import { CheckCircle2, Circle, X, AlertTriangle, Bell } from "lucide-react";
+import { CheckCircle2, Circle, X, AlertTriangle, Bell, Lock } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/Auth";
 import { Panel, StatusBadge } from "@/components/Common";
@@ -11,10 +11,10 @@ import { Button } from "@/components/ui/button";
 
 export function Onboarding() {
   const [d, setD] = useState(null);
-  const { company, refresh } = useAuth();
+  const { company, checkSetup } = useAuth();
   const load = () => api.get("/onboarding").then((r) => {
     setD(r.data);
-    if (r.data.setup_complete && company && !company.setup_complete) { toast.success("¡Su salón está configurado! Ya tiene acceso a todas las opciones.", { id: "setup-done" }); refresh(); }
+    if (company && !company.setup_complete) checkSetup();
   }).catch(() => {});
   useEffect(() => { load(); }, []); // eslint-disable-line
   if (!d || d.dismissed) return null;
@@ -29,18 +29,23 @@ export function Onboarding() {
   return (
     <Panel title={`Guía de arranque · ${done}/${d.steps.length}`} className="mb-8" testid="onboarding-panel"
       action={d.setup_complete && <button onClick={async () => { await api.post("/onboarding", { dismissed: true }); load(); }} className="text-muted-foreground" data-testid="onboarding-dismiss"><X className="h-4 w-4" /></button>}>
-      {!d.setup_complete && <p className="mb-3 text-sm text-muted-foreground" data-testid="onboarding-setup-msg">Complete los {req.length} pasos obligatorios ({req.filter((s) => s.done).length}/{req.length} listos) para activar la agenda, el portal de reservas y el resto del sistema.</p>}
+      {!d.setup_complete && <p className="mb-3 text-sm text-muted-foreground" data-testid="onboarding-setup-msg">Paso {req.findIndex((s) => s.key === d.current) + 1} de {req.length}: complete cada paso en orden; al terminarlo aparece el siguiente en el menú. Al finalizar se activan la agenda, el portal de reservas y el resto del sistema.</p>}
       <div className="mb-4 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${(done / d.steps.length) * 100}%` }} /></div>
       <div className="grid gap-6 md:grid-cols-[1fr_auto]">
         <ul className="space-y-2">
-          {d.steps.map((s) => (
-            <li key={s.key} className="flex items-center gap-2 text-sm" data-testid={`onboarding-step-${s.key}`}>
-              {s.done ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Circle className="h-4 w-4 text-slate-300" />}
-              {s.to ? <Link to={s.to} className={s.done ? "text-muted-foreground line-through" : "hover:text-primary"}>{s.label}</Link>
-                : !d.setup_complete ? <span className="text-muted-foreground">{s.label} (disponible al terminar los pasos anteriores)</span>
+          {d.steps.map((s, i) => {
+            const locked = !d.setup_complete && !s.done && s.key !== d.current;
+            const isCur = s.key === d.current;
+            return (
+            <li key={s.key} className={`flex items-center gap-2 rounded-lg text-sm ${isCur ? "bg-primary/5 px-2 py-1.5 font-semibold" : ""}`} data-testid={`onboarding-step-${s.key}`}>
+              {s.done ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : locked ? <Lock className="h-4 w-4 text-slate-300" /> : <Circle className="h-4 w-4 text-primary" />}
+              <span className="w-4 text-xs text-muted-foreground">{i + 1}.</span>
+              {locked ? <span className="text-muted-foreground" data-testid={`onboarding-locked-${s.key}`}>{s.label}</span>
+                : s.to ? <Link to={s.to} className={s.done ? "text-muted-foreground line-through" : "text-primary hover:underline"} data-testid={`onboarding-link-${s.key}`}>{s.label}{isCur && " →"}</Link>
                 : <button onClick={share} className={s.done ? "text-muted-foreground line-through" : "text-primary underline"} data-testid="onboarding-share">{s.label}</button>}
             </li>
-          ))}
+            );
+          })}
         </ul>
         {d.setup_complete ? (
           <div className="text-center" data-testid="onboarding-qr">

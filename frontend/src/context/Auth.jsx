@@ -7,6 +7,7 @@ const Ctx = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [company, setCompany] = useState(null);
+  const [setup, setSetup] = useState(null);
 
   const refresh = useCallback(async () => {
     if (!localStorage.getItem("token")) return setUser(false);
@@ -46,15 +47,19 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem("company_ctx");
     await refresh();
   };
-  const checkSetup = async () => {
+  const checkSetup = useCallback(async () => {
     if (!company || company.setup_complete) return;
     const r = await api.get("/onboarding").catch(() => null);
-    if (r?.data.setup_complete) { toast.success("¡Su salón está configurado! Ya tiene acceso a todas las opciones.", { id: "setup-done" }); await refresh(); }
-  };
+    if (!r) return;
+    setSetup(r.data);
+    if (r.data.setup_complete) { toast.success("¡Su salón está configurado! Ya tiene acceso a todas las opciones.", { id: "setup-done" }); await refresh(); }
+    else if (setup && setup.current !== r.data.current) toast.success("¡Paso completado! Ya puede continuar con el siguiente.", { id: `step-${r.data.current}` });
+  }, [company, setup, refresh]);
+  useEffect(() => { checkSetup(); }, [company?.id, company?.setup_complete]); // eslint-disable-line
   const has = (mod) => (company?.enabled_modules || []).includes(mod);
 
   return (
-    <Ctx.Provider value={{ user, company, login, logout, refresh, enterCompany, setToken, has, checkSetup }}>
+    <Ctx.Provider value={{ user, company, login, logout, refresh, enterCompany, setToken, has, checkSetup, setup }}>
       {children}
     </Ctx.Provider>
   );
