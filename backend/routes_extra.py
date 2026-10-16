@@ -258,9 +258,11 @@ async def add_templates(body: dict = Body(...), c=Depends(guard(("company_admin"
     return {"created": len(items)}
 
 
-@r.get("/onboarding")
-async def onboarding(c=Depends(guard(STAFF))):
-    co, cid = c["company"], c["cid"]
+REQUIRED_STEPS = ("services", "stylists", "salon", "rules")
+
+
+async def setup_steps(co):
+    cid = co["id"]
     branches = await find("branches", {"company_id": cid})
     ob = co.get("onboarding") or {}
     steps = [
@@ -271,7 +273,19 @@ async def onboarding(c=Depends(guard(STAFF))):
         {"key": "rules", "label": "Revise las reglas del salón (cancelación, anticipo, faltas)", "to": "/app/config?tab=reglas", "done": bool(co.get("rules_reviewed"))},
         {"key": "share", "label": "Comparta su enlace de reservas", "to": None, "done": bool(ob.get("shared"))},
     ]
-    return {"steps": steps, "dismissed": bool(ob.get("dismissed")), "portal_url": portal_url(co["slug"])}
+    complete = bool(co.get("setup_complete")) or all(s["done"] for s in steps if s["key"] in REQUIRED_STEPS)
+    if complete and not co.get("setup_complete"):
+        await db.companies.update_one({"id": cid}, {"$set": {"setup_complete": True}})
+    return steps, complete
+
+
+@r.get("/onboarding")
+async def onboarding(c=Depends(guard(STAFF))):
+    co = c["company"]
+    steps, complete = await setup_steps(co)
+    ob = co.get("onboarding") or {}
+    return {"steps": steps, "required": list(REQUIRED_STEPS), "setup_complete": complete,
+            "dismissed": bool(ob.get("dismissed")) and complete, "portal_url": portal_url(co["slug"])}
 
 
 @r.post("/onboarding")

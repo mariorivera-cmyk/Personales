@@ -54,6 +54,10 @@ async def scheduler():
 @app.on_event("startup")
 async def startup():
     await seed_all()
+    from routes_extra import setup_steps
+    from core import db
+    for co in await db.companies.find({"setup_complete": {"$exists": False}}, {"_id": 0}).to_list(1000):
+        await setup_steps(co)
     asyncio.create_task(scheduler())
 
 

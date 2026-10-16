@@ -5,15 +5,21 @@ import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 import { CheckCircle2, Circle, X, AlertTriangle, Bell } from "lucide-react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/context/Auth";
 import { Panel, StatusBadge } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 
 export function Onboarding() {
   const [d, setD] = useState(null);
-  const load = () => api.get("/onboarding").then((r) => setD(r.data)).catch(() => {});
-  useEffect(() => { load(); }, []);
+  const { company, refresh } = useAuth();
+  const load = () => api.get("/onboarding").then((r) => {
+    setD(r.data);
+    if (r.data.setup_complete && company && !company.setup_complete) { toast.success("¡Su salón está configurado! Ya tiene acceso a todas las opciones."); refresh(); }
+  }).catch(() => {});
+  useEffect(() => { load(); }, []); // eslint-disable-line
   if (!d || d.dismissed) return null;
   const done = d.steps.filter((s) => s.done).length;
+  const req = d.steps.filter((s) => d.required.includes(s.key));
   const share = async () => {
     await navigator.clipboard?.writeText(d.portal_url).catch(() => {});
     await api.post("/onboarding", { shared: true });
@@ -22,7 +28,8 @@ export function Onboarding() {
   };
   return (
     <Panel title={`Guía de arranque · ${done}/${d.steps.length}`} className="mb-8" testid="onboarding-panel"
-      action={<button onClick={async () => { await api.post("/onboarding", { dismissed: true }); load(); }} className="text-muted-foreground" data-testid="onboarding-dismiss"><X className="h-4 w-4" /></button>}>
+      action={d.setup_complete && <button onClick={async () => { await api.post("/onboarding", { dismissed: true }); load(); }} className="text-muted-foreground" data-testid="onboarding-dismiss"><X className="h-4 w-4" /></button>}>
+      {!d.setup_complete && <p className="mb-3 text-sm text-muted-foreground" data-testid="onboarding-setup-msg">Complete los {req.length} pasos obligatorios ({req.filter((s) => s.done).length}/{req.length} listos) para activar la agenda, el portal de reservas y el resto del sistema.</p>}
       <div className="mb-4 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${(done / d.steps.length) * 100}%` }} /></div>
       <div className="grid gap-6 md:grid-cols-[1fr_auto]">
         <ul className="space-y-2">
@@ -30,11 +37,12 @@ export function Onboarding() {
             <li key={s.key} className="flex items-center gap-2 text-sm" data-testid={`onboarding-step-${s.key}`}>
               {s.done ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Circle className="h-4 w-4 text-slate-300" />}
               {s.to ? <Link to={s.to} className={s.done ? "text-muted-foreground line-through" : "hover:text-primary"}>{s.label}</Link>
+                : !d.setup_complete ? <span className="text-muted-foreground">{s.label} (disponible al terminar los pasos anteriores)</span>
                 : <button onClick={share} className={s.done ? "text-muted-foreground line-through" : "text-primary underline"} data-testid="onboarding-share">{s.label}</button>}
             </li>
           ))}
         </ul>
-        {done === d.steps.length || d.steps.slice(0, 3).every((s) => s.done) ? (
+        {d.setup_complete ? (
           <div className="text-center" data-testid="onboarding-qr">
             <QRCodeSVG value={d.portal_url} size={120} />
             <div className="mt-1 max-w-[180px] break-all text-xs">{d.portal_url}</div>

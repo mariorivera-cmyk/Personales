@@ -1,4 +1,4 @@
-import { NavLink, Outlet, Navigate, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useState } from "react";
 import {
   LayoutDashboard, CalendarDays, Users, MessageCircle, ListOrdered, Scissors, Building2, UserRound, Ban, Gift,
@@ -32,6 +32,7 @@ const COMPANY_NAV = [
   { to: "/app/config", label: "Configuración", icon: Settings, roles: A },
   { to: "/app/facturacion", label: "Mi suscripción", icon: CreditCard, roles: A },
 ];
+const SETUP_PATHS = ["/app", "/app/servicios", "/app/sucursales", "/app/estilistas", "/app/config", "/app/facturacion"];
 const ADMIN_NAV = [
   { to: "/admin", label: "Resumen SaaS", icon: Shield, end: true },
   { to: "/admin/empresas", label: "Empresas", icon: Building2 },
@@ -52,10 +53,13 @@ export default function Layout() {
   const { user, company, logout, enterCompany } = useAuth();
   const [open, setOpen] = useState(false);
   const nav = useNavigate();
+  const loc = useLocation();
   if (user === null) return <div className="grid h-screen place-items-center text-muted-foreground">Cargando...</div>;
   if (!user) return <Navigate to="/login" replace />;
   const isSA = user.role === "super_admin";
-  const items = COMPANY_NAV.filter((n) => (isSA || n.roles.includes(user.role)) && (!n.mod || (company?.enabled_modules || []).includes(n.mod)));
+  const setup = !!company && !company.setup_complete && !isSA;
+  if (setup && loc.pathname.startsWith("/app") && !SETUP_PATHS.includes(loc.pathname)) return <Navigate to="/app" replace />;
+  const items = COMPANY_NAV.filter((n) => (isSA || n.roles.includes(user.role)) && (!n.mod || (company?.enabled_modules || []).includes(n.mod)) && (!setup || SETUP_PATHS.includes(n.to)));
   const locked = company && ["past_due", "suspended_partial", "suspended"].includes(company.status);
   const sidebar = (
     <aside className="flex h-full w-64 flex-col bg-slate-900 p-4 text-white grain">
@@ -71,6 +75,7 @@ export default function Layout() {
         {company && <>
           <div className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-widest text-slate-500">{company.name}</div>
           {items.map((n) => <Item key={n.to} n={n} onClick={() => setOpen(false)} />)}
+          {setup && <p className="mx-3 mt-4 rounded-lg bg-white/5 p-3 text-xs leading-relaxed text-slate-400" data-testid="setup-nav-note">Las demás opciones aparecerán cuando termine la guía de arranque.</p>}
         </>}
       </nav>
       <div className="border-t border-white/10 pt-3">
@@ -95,7 +100,7 @@ export default function Layout() {
               <button className="underline" onClick={() => { enterCompany(null); nav("/admin/empresas"); }} data-testid="exit-company-btn">Salir</button>
             </div>
           )}
-          {company?.slug && (
+          {company?.slug && !setup && (
             <a href={`/b/${company.slug}`} target="_blank" rel="noreferrer" className="ml-auto flex items-center gap-1 text-sm text-slate-600 hover:text-primary" data-testid="portal-link">
               Portal de reservas <ExternalLink className="h-3.5 w-3.5" />
             </a>

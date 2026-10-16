@@ -6,8 +6,24 @@ import { api, money, errMsg } from "@/lib/api";
 import { PageHeader, Kpi, Panel, StatusBadge, EmptyState, Loader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Onboarding, Alerts } from "@/components/Onboarding";
+import { useAuth } from "@/context/Auth";
 
 export default function Dashboard() {
+  const { company } = useAuth();
+  if (company && !company.setup_complete) return <SetupHome />;
+  return <Main />;
+}
+
+function SetupHome() {
+  return (
+    <div data-testid="setup-home">
+      <PageHeader title="Configuremos su salón" subtitle="Termine la guía de arranque para activar la agenda, el portal de reservas y todos los módulos" />
+      <Onboarding />
+    </div>
+  );
+}
+
+function Main() {
   const [d, setD] = useState(null);
   useEffect(() => { api.get("/dashboard").then((r) => setD(r.data)).catch((e) => toast.error(errMsg(e))); }, []);
   const runReminders = async () => {
