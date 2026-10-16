@@ -7,6 +7,11 @@ import { PageHeader, StatusBadge, Label } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AppointmentForm, Alternatives } from "@/components/AppointmentForm";
+import { CheckoutDialog, CancelDialog } from "@/components/Checkout";
+import { STATUS_CLS } from "@/lib/api";
+
+const PX = 1.5;
+const hm = (t) => `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
 
 const START = 8 * 60, END = 20 * 60;
 const wd = (d) => (new Date(d + "T12:00:00").getDay() + 6) % 7;
@@ -30,14 +35,14 @@ function workMinutes(st, branch, date) {
   return Math.max(0, Math.min(mins(bh[1]), mins(sh[1])) - Math.max(mins(bh[0]), mins(sh[0])));
 }
 
-function DayView({ appts, stylists, branches, date, onOpen }) {
+function DayView({ appts, stylists, branches, date, onOpen, onMove }) {
   const hours = [];
   for (let h = START; h < END; h += 60) hours.push(h);
   return (
     <div className="overflow-x-auto rounded-2xl border bg-white" data-testid="agenda-day-view">
       <div className="flex min-w-max">
         <div className="w-14 shrink-0 border-r pt-16">
-          {hours.map((h) => <div key={h} className="h-[60px] pr-2 text-right text-[11px] text-muted-foreground">{String(h / 60).padStart(2, "0")}:00</div>)}
+          {hours.map((h) => <div key={h} className="h-[90px] pr-2 text-right text-[11px] text-muted-foreground">{String(h / 60).padStart(2, "0")}:00</div>)}
         </div>
         {stylists.map((st, i) => {
           const mine = appts.filter((a) => a.stylist_id === st.id && !["cancelled"].includes(a.status));
@@ -51,15 +56,17 @@ function DayView({ appts, stylists, branches, date, onOpen }) {
                 <div className="mt-1 h-1.5 rounded-full bg-slate-200"><div className="h-1.5 rounded-full bg-primary" style={{ width: `${Math.min(occ, 100)}%` }} /></div>
                 <div className="text-[11px] text-muted-foreground">Ocupación {occ}%</div>
               </div>
-              <div className="relative" style={{ height: END - START }}>
-                {hours.map((h) => <div key={h} className="h-[60px] border-b border-dashed border-slate-100" />)}
+              <div className="relative" style={{ height: (END - START) * PX }} onDragOver={(e) => e.preventDefault()} data-testid={`agenda-drop-${st.id}`}
+                onDrop={(e) => { const y = e.clientY - e.currentTarget.getBoundingClientRect().top - Number(e.dataTransfer.getData("dy") || 0); onMove(e.dataTransfer.getData("id"), st.id, hm(START + Math.max(0, Math.round(y / PX / 30)) * 30)); }}>
+                {hours.map((h) => <div key={h} className="h-[90px] border-b border-dashed border-slate-100" />)}
                 {mine.map((a) => (
-                  <button key={a.id} onClick={() => onOpen(a)} data-testid={`appt-${a.id}`}
-                    className="absolute left-1 right-1 overflow-hidden rounded-lg border-l-4 bg-white p-1.5 text-left text-[11px] shadow-sm transition-transform hover:scale-[1.02]"
-                    style={{ top: mins(a.time) - START, height: Math.max(a.duration, 24), borderColor: COLORS[i % COLORS.length], background: `${COLORS[i % COLORS.length]}14` }}>
+                  <button key={a.id} onClick={() => onOpen(a)} data-testid={`appt-${a.id}`} draggable={a.status !== "completed"}
+                    onDragStart={(e) => { e.dataTransfer.setData("id", a.id); e.dataTransfer.setData("dy", String(e.clientY - e.currentTarget.getBoundingClientRect().top)); }}
+                    className={`absolute left-1 right-1 overflow-hidden rounded-lg border border-l-4 p-1.5 text-left text-[11px] leading-tight shadow-sm transition-transform hover:z-10 hover:scale-[1.02] ${STATUS_CLS[a.status]}`}
+                    style={{ top: (mins(a.time) - START) * PX, minHeight: Math.max(a.duration * PX, 48), borderLeftColor: COLORS[i % COLORS.length] }}>
                     <div className="font-semibold">{a.time} {a.client_name}</div>
                     <div className="truncate">{a.service_name}{a.addon_names?.length ? ` + ${a.addon_names.join(", ")}` : ""}</div>
-                    <div className="text-[10px] opacity-70">{STATUS[a.status]}</div>
+                    <div className="text-[10px] font-semibold opacity-80">{STATUS[a.status]}{a.deposit_status === "pending" ? " · anticipo pendiente" : ""}</div>
                   </button>
                 ))}
               </div>
@@ -120,10 +127,18 @@ function MonthView({ appts, start, onDay }) {
 function ApptDialog({ appt, onClose, reload, canEdit }) {
   const [res, setRes] = useState({});
   const [alts, setAlts] = useState(null);
+  const [checkout, setCheckout] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [info, setInfo] = useState(null);
+  const { user } = useAuth();
+  useEffect(() => { if (appt) api.get("/clients/lookup", { params: { phone: appt.client_phone } }).then((r) => setInfo(r.data)).catch(() => setInfo(null)); }, [appt]);
   useEffect(() => { if (appt) { setRes({ date: appt.date, time: appt.time }); setAlts(null); } }, [appt]);
   if (!appt) return null;
-  const status = async (s) => {
-    try { await api.post(`/appointments/${appt.id}/status`, { status: s }); toast.success(`Cita: ${STATUS[s]}`); reload(); onClose(); } catch (e) { toast.error(errMsg(e)); }
+  const status = async (s, reason = "") => {
+    try { await api.post(`/appointments/${appt.id}/status`, { status: s, reason }); toast.success(`Cita: ${STATUS[s]}`); reload(); onClose(); } catch (e) { toast.error(errMsg(e)); }
+  };
+  const deposit = async () => {
+    try { await api.post(`/appointments/${appt.id}/deposit`, {}); toast.success("Anticipo recibido: cita confirmada"); reload(); onClose(); } catch (e) { toast.error(errMsg(e)); }
   };
   const resched = async () => {
     try { await api.post(`/appointments/${appt.id}/reschedule`, res); toast.success("Cita reprogramada"); reload(); onClose(); }
@@ -140,10 +155,17 @@ function ApptDialog({ appt, onClose, reload, canEdit }) {
           <div>Total {money(appt.price)} · Anticipo requerido {money(appt.deposit_required)} · Tel. {appt.client_phone}</div>
         </div>
         {canEdit && <>
+          {info?.allergies && <div className="rounded-lg bg-rose-50 p-2 text-sm font-semibold text-rose-700" data-testid="appt-allergy-alert">Alergias: {info.allergies}</div>}
+          {info?.alert && <div className="rounded-lg bg-amber-50 p-2 text-sm text-amber-900">Esta clienta tiene {info.no_shows} faltas registradas.</div>}
           <div className="flex flex-wrap gap-2">
-            {[["confirmed", "Confirmar"], ["in_progress", "En curso"], ["completed", "Completar"], ["no_show", "No asistió"], ["cancelled", "Cancelar"]].map(([k, l]) => (
-              <Button key={k} size="sm" variant={k === "cancelled" ? "destructive" : "outline"} onClick={() => status(k)} data-testid={`appt-status-${k}`}>{l}</Button>
-            ))}
+            {appt.deposit_status === "pending" && <Button size="sm" onClick={deposit} data-testid="appt-deposit-received">Anticipo recibido</Button>}
+            {appt.status !== "completed" ? <>
+              {appt.status === "pending" && <Button size="sm" variant="outline" onClick={() => status("confirmed")} data-testid="appt-status-confirmed">Confirmar</Button>}
+              <Button size="sm" onClick={() => setCheckout(true)} data-testid="appt-status-completed">Atendida</Button>
+              <Button size="sm" variant="outline" onClick={() => status("no_show")} data-testid="appt-status-no_show">No asistió</Button>
+              <Button size="sm" variant="destructive" onClick={() => setCancelOpen(true)} data-testid="appt-status-cancelled">Cancelar</Button>
+            </> : user.role === "company_admin" ? <Button size="sm" variant="outline" onClick={() => status("confirmed", "Corrección de administrador")} data-testid="appt-reopen">Corregir (reabrir)</Button>
+              : <span className="text-xs text-muted-foreground">Cita atendida: solo un administrador puede corregirla.</span>}
           </div>
           <div className="grid grid-cols-3 items-end gap-2 border-t pt-3">
             <div><Label>Fecha</Label><input type="date" className="field" value={res.date || ""} onChange={(e) => setRes({ ...res, date: e.target.value })} data-testid="resched-date" /></div>
@@ -152,6 +174,8 @@ function ApptDialog({ appt, onClose, reload, canEdit }) {
           </div>
           {alts && <Alternatives alts={alts} onPick={(s) => setRes({ ...res, time: s.time, date: s.date || res.date, stylist_id: s.stylist_id })} />}
         </>}
+        {checkout && <CheckoutDialog appt={appt} onClose={() => setCheckout(false)} onDone={() => { setCheckout(false); reload(); onClose(); }} />}
+        <CancelDialog open={cancelOpen} onClose={() => setCancelOpen(false)} onConfirm={(r) => { setCancelOpen(false); status("cancelled", r); }} />
       </DialogContent>
     </Dialog>
   );
@@ -182,6 +206,12 @@ export default function Agenda() {
     if (user.role === "stylist") l = l.filter((x) => x.id === user.stylist_id);
     return l;
   }, [stylists, branch, user]);
+  const move = async (id, stylistId, time) => {
+    const a = appts.find((x) => x.id === id);
+    if (!a || (a.time === time && a.stylist_id === stylistId)) return;
+    try { await api.post(`/appointments/${id}/reschedule`, { date: a.date, time, stylist_id: stylistId }); toast.success(`Cita movida a las ${time}`); load(); }
+    catch (e) { toast.error(errMsg(e)); }
+  };
   const step = view === "day" ? 1 : view === "week" ? 7 : 30;
   const branchOcc = branches.filter((b) => !branch || b.id === branch).map((b) => {
     const work = stylists.filter((x) => x.branch_id === b.id && x.active !== false).reduce((t, x) => t + workMinutes(x, b, date), 0);
@@ -210,7 +240,8 @@ export default function Agenda() {
         )}
         {view === "day" && <div className="ml-auto flex gap-3 text-xs" data-testid="branch-occupancy">{branchOcc.map((b) => <span key={b.name} className="rounded-full bg-white px-3 py-1 border">{b.name}: <b>{b.occ}%</b></span>)}</div>}
       </div>
-      {view === "day" && <DayView appts={appts} stylists={cols} branches={branches} date={date} onOpen={setOpen} />}
+      <div className="mb-3 flex flex-wrap gap-2 text-[11px]" data-testid="status-legend">{Object.entries(STATUS).filter(([k]) => k !== "in_progress").map(([k, l]) => <span key={k} className={`rounded-full border px-2 py-0.5 ${STATUS_CLS[k]}`}>{l}</span>)}{view === "day" && canEdit && <span className="text-muted-foreground">Arrastre una cita para moverla de horario o estilista.</span>}</div>
+      {view === "day" && <DayView appts={appts} stylists={cols} branches={branches} date={date} onOpen={setOpen} onMove={canEdit ? move : () => {}} />}
       {view === "week" && <WeekView appts={appts} start={s} onOpen={setOpen} onDay={(d) => { setDate(d); setView("day"); }} />}
       {view === "month" && <MonthView appts={appts} start={s} onDay={(d) => { setDate(d); setView("day"); }} />}
       <ApptDialog appt={open} onClose={() => setOpen(null)} reload={load} canEdit={canEdit} />

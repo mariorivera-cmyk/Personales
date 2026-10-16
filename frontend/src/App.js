@@ -4,8 +4,11 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/context/Auth";
 import Layout from "@/components/Layout";
 import Login from "@/pages/Login";
-import Signup from "@/pages/Signup";
-import PublicBooking from "@/pages/PublicBooking";
+import Signup from "@/pages/SignupSimple";
+import PublicBooking from "@/pages/portal/Portal";
+import ReviewPage from "@/pages/portal/ReviewPage";
+import { CashClose, Commissions } from "@/pages/CashCommissions";
+import { Inventory, ReviewsGallery } from "@/pages/InventoryReviews";
 import Dashboard from "@/pages/Dashboard";
 import Agenda from "@/pages/Agenda";
 import Clients from "@/pages/Clients";
@@ -40,6 +43,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/b/:slug" element={<PublicBooking />} />
+          <Route path="/b/:slug/resena/:token" element={<ReviewPage />} />
           <Route element={<Layout />}>
             <Route path="/app" element={<Dashboard />} />
             <Route path="/app/agenda" element={<Agenda />} />
@@ -57,6 +61,10 @@ export default function App() {
             <Route path="/app/reportes" element={<Reports />} />
             <Route path="/app/config" element={<CompanySettings />} />
             <Route path="/app/facturacion" element={<Billing />} />
+            <Route path="/app/caja" element={<CashClose />} />
+            <Route path="/app/comisiones" element={<Commissions />} />
+            <Route path="/app/inventario" element={<Inventory />} />
+            <Route path="/app/resenas" element={<ReviewsGallery />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/empresas" element={<AdminCompanies />} />
             <Route path="/admin/catalogo" element={<AdminCatalog />} />

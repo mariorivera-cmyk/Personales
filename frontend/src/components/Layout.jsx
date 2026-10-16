@@ -2,7 +2,7 @@ import { NavLink, Outlet, Navigate, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import {
   LayoutDashboard, CalendarDays, Users, MessageCircle, ListOrdered, Scissors, Building2, UserRound, Ban, Gift,
-  TrendingUp, Megaphone, BarChart3, Settings, CreditCard, LogOut, Shield, Package, Wallet, Menu, X, AlertTriangle, ExternalLink,
+  TrendingUp, Megaphone, BarChart3, Settings, CreditCard, LogOut, Shield, Package, Wallet, Menu, X, AlertTriangle, ExternalLink, Banknote, Percent, Boxes, Star,
 } from "lucide-react";
 import { useAuth } from "@/context/Auth";
 import { ROLES, CO_STATUS } from "@/lib/api";
@@ -15,6 +15,10 @@ const COMPANY_NAV = [
   { to: "/app", label: "Dashboard", icon: LayoutDashboard, roles: S, end: true },
   { to: "/app/agenda", label: "Agenda", icon: CalendarDays, roles: ALL },
   { to: "/app/clientes", label: "Clientes (CRM)", icon: Users, roles: ALL },
+  { to: "/app/caja", label: "Caja", icon: Banknote, roles: S },
+  { to: "/app/comisiones", label: "Comisiones", icon: Percent, roles: M },
+  { to: "/app/inventario", label: "Inventario", icon: Boxes, roles: S },
+  { to: "/app/resenas", label: "Reseñas y galería", icon: Star, roles: S },
   { to: "/app/whatsapp", label: "WhatsApp", icon: MessageCircle, roles: ALL, mod: "whatsapp" },
   { to: "/app/espera", label: "Lista de espera", icon: ListOrdered, roles: S, mod: "waitlist" },
   { to: "/app/servicios", label: "Servicios", icon: Scissors, roles: A },

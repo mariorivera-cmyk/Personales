@@ -3,8 +3,9 @@ import { toast } from "sonner";
 import { CalendarCheck, CalendarClock, Gauge, Hourglass, DollarSign, Receipt, UserPlus, Repeat, Megaphone, TrendingUp, ArrowUpRight, Bell } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { api, money, errMsg } from "@/lib/api";
-import { PageHeader, Kpi, Panel, StatusBadge, EmptyState } from "@/components/Common";
+import { PageHeader, Kpi, Panel, StatusBadge, EmptyState, Loader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
+import { Onboarding, Alerts } from "@/components/Onboarding";
 
 export default function Dashboard() {
   const [d, setD] = useState(null);
@@ -13,12 +14,14 @@ export default function Dashboard() {
     const r = await api.post("/reminders/run");
     toast.success(`${r.data.sent} recordatorio(s) enviados por WhatsApp`);
   };
-  if (!d) return <div className="text-muted-foreground">Cargando indicadores...</div>;
+  if (!d) return <Loader />;
   const cur = d.currency;
   return (
     <div data-testid="dashboard-page">
       <PageHeader title="Dashboard gerencial" subtitle="Indicadores en tiempo real de operación, comercial y marketing"
         action={<Button variant="outline" onClick={runReminders} data-testid="run-reminders-btn"><Bell className="mr-1 h-4 w-4" />Enviar recordatorios</Button>} />
+      <Onboarding />
+      <Alerts />
       <h4 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">Operación</h4>
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Kpi label="Citas hoy" value={d.today} icon={CalendarCheck} testid="kpi-today" />

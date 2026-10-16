@@ -18,7 +18,8 @@ export default function ClientDetail() {
   const load = useCallback(() => api.get(`/clients/${id}`).then((r) => { setD(r.data); setF(r.data.client); }).catch((e) => toast.error(errMsg(e))), [id]);
   useEffect(() => { load(); }, [load]);
   if (!d) return <div className="text-muted-foreground">Cargando...</div>;
-  const canEdit = user.role !== "stylist";
+  const canEdit = true;
+  const canBook = user.role !== "stylist";
   const save = async () => {
     try { await api.put(`/clients/${id}`, f); toast.success("Ficha actualizada"); load(); } catch (e) { toast.error(errMsg(e)); }
   };
@@ -41,7 +42,8 @@ export default function ClientDetail() {
     <div data-testid="client-detail-page">
       <Link to="/app/clientes" className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"><ArrowLeft className="h-4 w-4" />Clientes</Link>
       <PageHeader title={d.client.name} subtitle={`${d.client.phone} · ${d.client.points || 0} puntos${d.client.membership ? ` · Membresía ${d.client.membership}` : ""}`}
-        action={canEdit && <Button onClick={() => setBooking(true)} data-testid="client-book-btn">Agendar cita</Button>} />
+        action={canBook && <Button onClick={() => setBooking(true)} data-testid="client-book-btn">Agendar cita</Button>} />
+      {notes.allergies && <div className="mb-6 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-sm font-semibold text-rose-800" data-testid="client-allergy-banner">Alergias: {notes.allergies}</div>}
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Kpi label="Visitas" value={s.visits} testid="client-visits" />
         <Kpi label="Gasto acumulado" value={money(s.spent)} testid="client-spent" />
@@ -62,11 +64,14 @@ export default function ClientDetail() {
             ))}
             <div><Label>Género</Label><select className="field" disabled={!canEdit} value={f.gender || ""} onChange={(e) => setF({ ...f, gender: e.target.value })} data-testid="client-gender-select">
               <option value="">—</option><option value="F">Femenino</option><option value="M">Masculino</option><option value="O">Otro</option></select></div>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.photo_consent !== false} onChange={(e) => setF({ ...f, photo_consent: e.target.checked })} data-testid="client-photo-consent" />Autoriza fotografías</label>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!f.no_whatsapp} onChange={(e) => setF({ ...f, no_whatsapp: e.target.checked })} data-testid="client-no-whatsapp" />No tiene WhatsApp (avisos por correo)</label>
+            {f.data_consent && <p className="text-xs text-muted-foreground">Consentimiento de datos: {String(f.data_consent).slice(0, 10)}</p>}
           </div>
         </Panel>
         <Panel title="Notas internas (cifradas)" testid="client-notes-panel">
           <div className="space-y-3">
-            {[["preferences", "Preferencias"], ["restrictions", "Restricciones / alergias"], ["observations", "Observaciones"]].map(([k, l]) => (
+            {[["allergies", "Alergias"], ["color_formulas", "Fórmulas de color"], ["preferences", "Preferencias"], ["restrictions", "Restricciones"], ["observations", "Notas privadas"]].map(([k, l]) => (
               <div key={k}><Label>{l}</Label><textarea className="field h-20 py-2" disabled={!canEdit} value={notes[k] || ""} onChange={(e) => setF({ ...f, notes: { ...notes, [k]: e.target.value } })} data-testid={`client-note-${k}`} /></div>
             ))}
             {canEdit && <Button onClick={save} className="w-full" data-testid="client-save-btn">Guardar ficha</Button>}
@@ -74,7 +79,7 @@ export default function ClientDetail() {
         </Panel>
         <Panel title="Archivos" testid="client-files-panel">
           {canEdit && <div className="mb-3 flex flex-wrap gap-2">
-            {[["foto", "Fotografía"], ["consentimiento", "Consentimiento"], ["documento", "Documento"]].map(([k, l]) => (
+            {[["antes", "Foto antes"], ["despues", "Foto después"], ["consentimiento", "Consentimiento"], ["documento", "Documento"]].map(([k, l]) => (
               <label key={k} className="inline-flex cursor-pointer items-center gap-1 rounded-full border bg-white px-3 py-1.5 text-xs hover:border-primary">
                 <Upload className="h-3.5 w-3.5" />{l}<input type="file" className="hidden" data-kind={k} onChange={upload} data-testid={`upload-${k}`} />
               </label>

@@ -29,6 +29,42 @@ export function InvoiceTable({ invoices, onPay, onTransfer, cur }) {
   );
 }
 
+function ActivatePanel({ plans, current, onDone }) {
+  const [f, setF] = useState({ plan_id: current, billing_cycle: "monthly" });
+  const [card, setCard] = useState({});
+  const [q, setQ] = useState(null);
+  useEffect(() => { if (f.plan_id) api.post("/billing/quote", f).then((r) => setQ(r.data)).catch(() => {}); }, [f.plan_id, f.billing_cycle]); // eslint-disable-line
+  const go = async () => {
+    try {
+      const t = await api.post("/gateway/tokenize", card);
+      await api.post("/billing/activate", { ...f, card: t.data });
+      toast.success("¡Plan activado!");
+      onDone();
+    } catch (e) { toast.error(errMsg(e)); }
+  };
+  return (
+    <Panel title="Activar mi plan" className="mb-6" testid="activate-panel">
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label>Plan</Label><select className="field" value={f.plan_id || ""} onChange={(e) => setF({ ...f, plan_id: e.target.value })} data-testid="activate-plan">{plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+            <div><Label>Ciclo</Label><select className="field" value={f.billing_cycle} onChange={(e) => setF({ ...f, billing_cycle: e.target.value })} data-testid="activate-cycle"><option value="monthly">Mensual</option><option value="annual">Anual</option></select></div>
+          </div>
+          <div><Label>NIT (o CF)</Label><input className="field" value={f.nit || ""} onChange={(e) => setF({ ...f, nit: e.target.value })} data-testid="activate-nit" /></div>
+          <CardForm value={card} onChange={setCard} />
+        </div>
+        {q && <div className="rounded-xl bg-slate-900 p-5 text-sm text-white" data-testid="activate-quote">
+          {q.items.map((i) => <div key={i.desc} className="flex justify-between"><span>{i.desc}</span><span>{money(i.amount)}</span></div>)}
+          <div className="mt-2 flex justify-between border-t border-white/20 pt-2"><span>Subtotal</span><span>{money(q.subtotal)}</span></div>
+          <div className="flex justify-between"><span>IVA ({q.tax_rate}%)</span><span>{money(q.tax)}</span></div>
+          <div className="mt-2 flex justify-between text-xl font-bold"><span>Total</span><span data-testid="activate-total">{money(q.total)}</span></div>
+          <Button className="mt-4 w-full rounded-full" onClick={go} disabled={!f.nit || !card.number} data-testid="activate-submit">Activar y pagar</Button>
+        </div>}
+      </div>
+    </Panel>
+  );
+}
+
 export default function Billing() {
   const { refresh } = useAuth();
   const [d, setD] = useState(null);
@@ -62,6 +98,7 @@ export default function Billing() {
         <Kpi label="Saldo pendiente" value={money(d.balance, cur)} testid="billing-balance" accent="text-rose-600" />
         <Kpi label="Próximo cobro" value={d.company.next_billing_date || d.company.trial_ends || "—"} testid="billing-next" />
       </div>
+      {d.company.status === "trial" && <ActivatePanel plans={plans} current={d.company.plan_id} onDone={() => { load(); refresh(); }} />}
       <div className="grid gap-6 lg:grid-cols-3">
         <Panel title="Módulos" className="lg:col-span-2" testid="billing-modules">
           <div className="grid gap-2 sm:grid-cols-2">

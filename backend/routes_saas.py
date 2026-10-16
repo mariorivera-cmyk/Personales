@@ -105,7 +105,7 @@ async def new_company(body, plan, status="trial"):
          "wa_packs": 0, "created_at": now_iso()}
     await insert("companies", c)
     hours = {str(d): ["09:00", "19:00"] for d in range(6)}
-    await insert("branches", {"id": uid(), "company_id": c["id"], "name": "Sucursal Principal", "address": "", "phone": c["phone"],
+    await insert("branches", {"id": uid(), "company_id": c["id"], "name": "Sucursal Principal", "address": body.get("address", ""), "phone": c["phone"],
                               "hours": hours, "capacity": 4, "created_at": now_iso()})
     user = {"id": uid(), "email": c["contact_email"], "name": body.get("contact_name") or body["company_name"],
             "role": "company_admin", "company_id": c["id"], "password_hash": hash_pw(body["password"]), "created_at": now_iso()}
@@ -131,12 +131,14 @@ async def tokenize(body: dict = Body(...)):
 
 @r.post("/signup")
 async def signup(response: Response, body: dict = Body(...)):
-    for f in ("company_name", "email", "password", "plan_id"):
+    for f in ("company_name", "email", "password", "whatsapp_number"):
         if not body.get(f):
             raise HTTPException(400, f"Campo requerido: {f}")
-    if not body.get("accept_terms"):
-        raise HTTPException(400, "Debe aceptar los términos y condiciones")
-    plan = await one("plans", {"id": body["plan_id"]})
+    if len(body["password"]) < 8:
+        raise HTTPException(400, "La contraseña debe tener al menos 8 caracteres")
+    plans = await find("plans", {"active": {"$ne": False}}, [("price_monthly", 1)])
+    plan = await one("plans", {"id": body.get("plan_id")}) or (plans[1] if len(plans) > 1 else plans[0])
+    body["accept_terms"] = True
     if not plan:
         raise HTTPException(400, "Plan inválido")
     c, user = await new_company(body, plan)
@@ -294,6 +296,46 @@ async def get_pdf(iid: str, user=Depends(get_user)):
     if not inv or (user["role"] != "super_admin" and inv["company_id"] != user.get("company_id")):
         raise HTTPException(404, "Factura no encontrada")
     return Response(invoice_pdf(inv), media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename={inv['number']}.pdf"})
+
+
+@r.get("/public/slug-check")
+async def slug_check(slug: str):
+    s = re.sub(r"[^a-z0-9-]", "", slug.lower().replace(" ", "-"))
+    if not s:
+        return {"slug": s, "available": False, "suggestions": []}
+    if not await one("companies", {"slug": s}):
+        return {"slug": s, "available": True, "suggestions": []}
+    sug = [x for x in (f"{s}-salon", f"{s}-gt", f"{s}-2", f"salon-{s}") if not await one("companies", {"slug": x})]
+    return {"slug": s, "available": False, "suggestions": sug[:3]}
+
+
+@r.post("/billing/activate")
+async def activate(body: dict = Body(...), c=Depends(guard(("company_admin",)))):
+    plan = await one("plans", {"id": body.get("plan_id")})
+    if not plan or not body.get("nit") or not body.get("card"):
+        raise HTTPException(400, "Seleccione plan e ingrese NIT y tarjeta")
+    mods = sorted(set(c["company"].get("enabled_modules", [])) | set(plan.get("included_modules", [])))
+    await db.companies.update_one({"id": c["cid"]}, {"$set": {"plan_id": plan["id"], "nit": body["nit"], "card": body["card"], "enabled_modules": mods,
+                                                              "billing_cycle": body.get("billing_cycle", "monthly")}})
+    co = await one("companies", {"id": c["cid"]})
+    inv = await create_invoice(co, await cycle_items(co))
+    ok = await charge(co, inv)
+    await history(c["cid"], c["user"], f"Activación plan {plan['name']} ({'aprobado' if ok else 'rechazado'})")
+    if not ok:
+        raise HTTPException(402, "La tarjeta fue rechazada. Intente con otra tarjeta")
+    return {"ok": True, "invoice": inv}
+
+
+@r.post("/billing/quote")
+async def quote(body: dict = Body(...), c=Depends(guard(("company_admin",)))):
+    co = {**c["company"], "plan_id": body.get("plan_id"), "billing_cycle": body.get("billing_cycle", "monthly")}
+    plan = await one("plans", {"id": body.get("plan_id")}) or {}
+    co["enabled_modules"] = sorted(set(co.get("enabled_modules", [])) | set(plan.get("included_modules", [])))
+    items = await cycle_items(co)
+    s = await psettings()
+    sub = round(sum(i["amount"] for i in items), 2)
+    tax = round(sub * float(s.get("tax_rate", 12)) / 100, 2)
+    return {"items": items, "subtotal": sub, "tax": tax, "total": round(sub + tax, 2), "tax_rate": s.get("tax_rate", 12)}
 
 
 @r.get("/billing/statement")

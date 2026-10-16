@@ -1,8 +1,12 @@
 import os
 import json
+import hashlib
+import secrets
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, Body, HTTPException, Request, Response
 from emergentintegrations.llm.chat import LlmChat, UserMessage
-from core import db, find, one, uid, now_iso, today, local_now, insert, guard, wa_send, norm_phone, ALL_STAFF
+from core import (db, find, one, uid, now_iso, today, local_now, insert, guard, wa_send, norm_phone, ALL_STAFF, valid_phone,
+                  make_client_token, client_from_token, notify_company, audit)
 import engine as E
 from routes_ops import waitlist_entry
 
@@ -99,7 +103,9 @@ async def execute(company, phone, action):
             if t == "reschedule":
                 a = await E.reschedule(cid, p["appointment_id"], p["date"], p["time"], p.get("stylist_id"))
             else:
-                a = await E.set_status(cid, p["appointment_id"], "cancelled" if t == "cancel" else "confirmed")
+                a = await E.set_status(cid, p["appointment_id"], "cancelled" if t == "cancel" else "confirmed", by_client=True)
+                if t == "cancel":
+                    await notify_company(cid, "Cancelación por WhatsApp", f"{a['client_name']} canceló {a['service_name']} del {a['date']} {a['time']}.")
             return {"ok": True, "cita": {k: a[k] for k in ("id", "service_name", "date", "time", "stylist_name", "status")}}
         if t == "waitlist":
             if "waitlist" not in company.get("enabled_modules", []):
@@ -209,10 +215,18 @@ async def public_company(slug):
 async def public_salon(slug: str):
     c = await public_company(slug)
     cid = c["id"]
+    s = c.get("settings", {})
+    revs = await find("reviews", {"company_id": cid, "hidden": {"$ne": True}}, [("created_at", -1)], 200)
     return {"name": c["name"], "slug": slug, "whatsapp_number": c.get("whatsapp_number"), "currency": c.get("currency", "GTQ"),
-            "portal": c.get("settings", {}).get("portal", {}), "waitlist": "waitlist" in c.get("enabled_modules", []),
-            "branches": [{k: b.get(k) for k in ("id", "name", "address", "phone")} for b in await find("branches", {"company_id": cid})],
-            "services": [{k: s.get(k) for k in ("id", "name", "description", "duration", "price", "category", "deposit")}
+            "portal": s.get("portal", {}), "waitlist": "waitlist" in c.get("enabled_modules", []),
+            "description": c.get("description", ""), "logo_url": c.get("logo_url"), "photo_urls": c.get("photo_urls") or [],
+            "social": c.get("social") or {}, "show_team": c.get("show_team", True), "phone": c.get("phone"),
+            "policy": s.get("policy", {}), "deposit_rules": s.get("deposit_rules", []), "legal": s.get("legal", {}),
+            "rating": round(sum(x["rating"] for x in revs) / len(revs), 1) if revs else None, "reviews_count": len(revs),
+            "reviews": [{k: x.get(k) for k in ("client_name", "rating", "comment", "service_name", "created_at")} for x in revs[:6]],
+            "gallery": [{k: g.get(k) for k in ("id", "url", "caption", "service_id")} for g in await find("gallery", {"company_id": cid})],
+            "branches": [{k: b.get(k) for k in ("id", "name", "address", "phone", "hours")} for b in await find("branches", {"company_id": cid})],
+            "services": [{k: s.get(k) for k in ("id", "name", "description", "duration", "price", "category", "deposit", "photo_url", "price_from", "price_note")}
                          for s in await find("services", {"company_id": cid, "active": {"$ne": False}})],
             "stylists": [{k: s.get(k) for k in ("id", "name", "branch_id", "specialties", "photo")}
                          for s in await find("stylists", {"company_id": cid, "active": {"$ne": False}})]}
@@ -243,24 +257,163 @@ async def public_book(slug: str, body: dict = Body(...)):
     return a
 
 
-@r.post("/public/salon/{slug}/my")
-async def public_my(slug: str, body: dict = Body(...)):
+def otp_hash(code):
+    return hashlib.sha256((code + os.environ["JWT_SECRET"]).encode()).hexdigest()
+
+
+@r.post("/public/salon/{slug}/otp")
+async def otp_request(slug: str, body: dict = Body(...)):
     c = await public_company(slug)
-    return await find("appointments", {"company_id": c["id"], "client_phone": norm_phone(body.get("phone")), "date": {"$gte": today()},
-                                       "status": {"$in": ["pending", "confirmed"]}}, [("date", 1)])
+    phone = norm_phone(body.get("phone"))
+    if not valid_phone(phone):
+        raise HTTPException(400, "Teléfono inválido")
+    since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    if await db.otp_codes.count_documents({"cid": c["id"], "phone": phone, "created_at": {"$gte": since}}) >= 3:
+        raise HTTPException(429, "Ha solicitado demasiados códigos. Intente de nuevo en una hora")
+    code = f"{secrets.randbelow(10 ** 6):06d}"
+    await insert("otp_codes", {"id": uid(), "cid": c["id"], "phone": phone, "hash": otp_hash(code), "used": False,
+                               "expires": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(), "created_at": now_iso()})
+    if await one("clients", {"company_id": c["id"], "phone": phone}):
+        await wa_send(c["id"], phone, f"Su código de verificación de {c['name']} es {code}. Vence en 10 minutos.", "otp")
+    return {"message": "Te enviamos un código por WhatsApp"}
+
+
+@r.post("/public/salon/{slug}/otp/verify")
+async def otp_verify(slug: str, body: dict = Body(...)):
+    c = await public_company(slug)
+    phone = norm_phone(body.get("phone"))
+    lock = await one("otp_locks", {"cid": c["id"], "phone": phone})
+    if lock and lock.get("until", "") > now_iso():
+        raise HTTPException(429, "Demasiados intentos. La verificación está bloqueada 15 minutos")
+    rec = await db.otp_codes.find_one({"cid": c["id"], "phone": phone, "used": False}, {"_id": 0}, sort=[("created_at", -1)])
+    if not rec or rec["expires"] < now_iso() or rec["hash"] != otp_hash(str(body.get("code", "")).strip()):
+        cnt = ((lock or {}).get("count", 0) if not (lock or {}).get("until") else 0) + 1
+        upd = {"count": cnt, "until": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat() if cnt >= 5 else ""}
+        await db.otp_locks.update_one({"cid": c["id"], "phone": phone}, {"$set": upd}, upsert=True)
+        raise HTTPException(400, "Código inválido o vencido")
+    await db.otp_codes.update_one({"id": rec["id"]}, {"$set": {"used": True}})
+    await db.otp_locks.delete_one({"cid": c["id"], "phone": phone})
+    return {"token": make_client_token(c["id"], phone)}
+
+
+@r.get("/public/salon/{slug}/account")
+async def public_account(slug: str, request: Request):
+    c = await public_company(slug)
+    phone = client_from_token(request, c["id"])
+    cl = await one("clients", {"company_id": c["id"], "phone": phone}) or {}
+    appts = await find("appointments", {"company_id": c["id"], "client_phone": phone}, [("date", -1), ("time", -1)], 100)
+    up = [a for a in appts if a["date"] >= today() and a["status"] in ("pending", "confirmed")][::-1]
+    past = [a for a in appts if a["status"] == "completed"][:20]
+    keys = ("id", "service_id", "service_name", "addon_names", "stylist_id", "stylist_name", "branch_id", "branch_name", "date", "time",
+            "end_time", "status", "price", "deposit_required", "deposit_status")
+    return {"phone": phone, "name": cl.get("name", ""), "points": cl.get("points", 0), "membership": cl.get("membership", ""),
+            "upcoming": [{k: a.get(k) for k in keys} for a in up], "past": [{k: a.get(k) for k in keys} for a in past]}
+
+
+@r.post("/public/salon/{slug}/account/delete-request")
+async def delete_request(slug: str, request: Request):
+    c = await public_company(slug)
+    phone = client_from_token(request, c["id"])
+    await insert("data_requests", {"id": uid(), "company_id": c["id"], "phone": phone, "type": "delete", "status": "pending", "created_at": now_iso()})
+    await notify_company(c["id"], "Solicitud de borrado de datos", f"El cliente {phone} solicitó borrar sus datos personales.")
+    return {"message": "Solicitud registrada. El salón la atenderá y le confirmará por WhatsApp."}
+
+
+@r.post("/public/salon/{slug}/slots-multi")
+async def public_slots_multi(slug: str, body: dict = Body(...)):
+    c = await public_company(slug)
+    lines = body.get("lines") or []
+    opts = await E.multi_slots(c["id"], body["branch_id"], body["date"], lines)
+    sugg = await E.suggestions(c["id"], lines[0]["service_id"]) if lines and "upsell" in c.get("enabled_modules", []) else []
+    alts = None
+    if not opts and lines:
+        alts = await E.alternatives(c["id"], body["branch_id"], lines[0]["service_id"], body["date"], None, lines[0].get("stylist_id") or None)
+    return {"options": opts, "suggestions": sugg, "alternatives": alts, "today": body["date"] == today()}
+
+
+@r.post("/public/salon/{slug}/book-multi")
+async def public_book_multi(slug: str, body: dict = Body(...)):
+    c = await public_company(slug)
+    if not (body.get("name") or "").strip():
+        raise HTTPException(400, "Ingrese su nombre")
+    try:
+        appts = await E.book_multi(c["id"], branch_id=body["branch_id"], date=body["date"], plan=body.get("plan") or [], phone=body.get("phone"),
+                                   name=body["name"], email=body.get("email"), referred_by=body.get("referred_by"), source="portal",
+                                   addon_ids=body.get("addon_ids"), rec_type=body.get("rec_type"))
+    except E.BookingError as e:
+        raise HTTPException(409, {"message": e.msg, "alternatives": e.alternatives})
+    if not appts:
+        raise HTTPException(400, "Seleccione al menos un servicio")
+    await db.clients.update_one({"id": appts[0]["client_id"]}, {"$set": {"data_consent": now_iso()}})
+    lines = "\n".join(f"- {a['service_name']}{(' + ' + ', '.join(a['addon_names'])) if a['addon_names'] else ''}: {a['time']}-{a['end_time']} con {a['stylist_name']}" for a in appts)
+    dep = sum(a["deposit_required"] for a in appts)
+    msg = f"¡Hola {appts[0]['client_name']}! Su reserva del {appts[0]['date']} en {appts[0]['branch_name']}:\n{lines}"
+    if dep:
+        bank = c.get("settings", {}).get("policy", {}).get("bank_info", "")
+        msg += f"\nAnticipo requerido: Q{dep:.2f}. {bank}"
+    await wa_send(c["id"], appts[0]["client_phone"], msg + "\nResponda CONFIRMAR para confirmarla.", "confirmation")
+    return {"appointments": appts, "deposit_total": dep}
+
+
+@r.get("/public/salon/{slug}/ics/{aid}")
+async def public_ics(slug: str, aid: str, t: str):
+    c = await public_company(slug)
+    a = await one("appointments", {"id": aid, "company_id": c["id"], "review_token": t})
+    if not a:
+        raise HTTPException(404, "Cita no encontrada")
+    br = await one("branches", {"id": a["branch_id"]}) or {}
+    st = lambda d, h: d.replace("-", "") + "T" + h.replace(":", "") + "00"
+    cancel = a["status"] == "cancelled"
+    ics = "\r\n".join(["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//SalonFlow//ES", f"METHOD:{'CANCEL' if cancel else 'PUBLISH'}", "BEGIN:VEVENT",
+                       f"UID:{a['id']}@salonflow", f"SEQUENCE:{len(a.get('status_log', []))}", f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
+                       f"DTSTART;TZID=America/Guatemala:{st(a['date'], a['time'])}", f"DTEND;TZID=America/Guatemala:{st(a['date'], a['end_time'])}",
+                       f"SUMMARY:{a['service_name']} - {c['name']}", f"LOCATION:{br.get('address') or br.get('name', '')}",
+                       f"DESCRIPTION:Con {a['stylist_name']}. Tel. {br.get('phone') or c.get('phone', '')}", f"STATUS:{'CANCELLED' if cancel else 'CONFIRMED'}",
+                       "END:VEVENT", "END:VCALENDAR"])
+    return Response(ics, media_type="text/calendar", headers={"Content-Disposition": "attachment; filename=cita.ics"})
+
+
+@r.get("/public/salon/{slug}/review/{token}")
+async def review_info(slug: str, token: str):
+    c = await public_company(slug)
+    a = await one("appointments", {"company_id": c["id"], "review_token": token, "status": "completed"})
+    if not a:
+        raise HTTPException(404, "Enlace de reseña no válido")
+    return {"service_name": a["service_name"], "stylist_name": a["stylist_name"], "date": a["date"],
+            "reviewed": bool(await one("reviews", {"appointment_id": a["id"]}))}
+
+
+@r.post("/public/salon/{slug}/review/{token}")
+async def review_post(slug: str, token: str, body: dict = Body(...)):
+    from routes_extra import notify_low_rating
+    c = await public_company(slug)
+    a = await one("appointments", {"company_id": c["id"], "review_token": token, "status": "completed"})
+    if not a or await one("reviews", {"appointment_id": a["id"]}):
+        raise HTTPException(400, "Esta cita ya fue calificada o el enlace no es válido")
+    rating = int(body.get("rating") or 0)
+    if not 1 <= rating <= 5:
+        raise HTTPException(400, "Seleccione de 1 a 5 estrellas")
+    rev = await insert("reviews", {"id": uid(), "company_id": c["id"], "appointment_id": a["id"], "client_name": a["client_name"].split(" ")[0],
+                                   "rating": rating, "comment": (body.get("comment") or "")[:500], "service_name": a["service_name"],
+                                   "stylist_name": a["stylist_name"], "hidden": False, "created_at": now_iso()})
+    await notify_low_rating(c["id"], rev)
+    return {"ok": True}
 
 
 @r.post("/public/salon/{slug}/appointments/{aid}")
-async def public_manage(slug: str, aid: str, body: dict = Body(...)):
+async def public_manage(slug: str, aid: str, request: Request, body: dict = Body(...)):
     c = await public_company(slug)
-    a = await one("appointments", {"id": aid, "company_id": c["id"], "client_phone": norm_phone(body.get("phone"))})
+    phone = client_from_token(request, c["id"])
+    a = await one("appointments", {"id": aid, "company_id": c["id"], "client_phone": phone})
     if not a:
         raise HTTPException(404, "Cita no encontrada")
     try:
         if body.get("action") == "cancel":
-            return await E.set_status(c["id"], aid, "cancelled")
+            res = await E.set_status(c["id"], aid, "cancelled", reason=body.get("reason", ""), by_client=True)
+            await notify_company(c["id"], "Cancelación desde el portal", f"{a['client_name']} canceló {a['service_name']} del {a['date']} {a['time']}.")
+            return res
         if body.get("action") == "confirm":
-            return await E.set_status(c["id"], aid, "confirmed")
+            return await E.set_status(c["id"], aid, "confirmed", by_client=True)
         return await E.reschedule(c["id"], aid, body["date"], body["time"], body.get("stylist_id") or None)
     except E.BookingError as e:
         raise HTTPException(409, {"message": e.msg, "alternatives": e.alternatives})

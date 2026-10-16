@@ -45,8 +45,17 @@ export const Panel = ({ title, action, children, className = "", testid }) => (
   </section>
 );
 
-export const EmptyState = ({ text }) => (
-  <div className="rounded-2xl border border-dashed bg-white/60 p-10 text-center text-sm text-muted-foreground" data-testid="empty-state">{text}</div>
+export const EmptyState = ({ text, action }) => (
+  <div className="rounded-2xl border border-dashed bg-white/60 p-10 text-center text-sm text-muted-foreground" data-testid="empty-state">
+    {text}
+    {action && <div className="mt-4 flex justify-center">{action}</div>}
+  </div>
+);
+
+export const Loader = () => (
+  <div className="flex items-center justify-center gap-2 p-10 text-sm text-muted-foreground" data-testid="loader">
+    <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />Cargando...
+  </div>
 );
 
 export const Label = ({ children }) => <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">{children}</label>;

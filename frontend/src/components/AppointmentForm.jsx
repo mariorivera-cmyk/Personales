@@ -27,6 +27,17 @@ export function AppointmentForm({ defaultDate, onDone, client }) {
   const [slots, setSlots] = useState(null);
   const [sugg, setSugg] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [info, setInfo] = useState(null);
+  useEffect(() => {
+    const digits = (f.phone || "").replace(/\D/g, "");
+    if (digits.length < 8) { setInfo(null); return; }
+    const t = setTimeout(() => api.get("/clients/lookup", { params: { phone: f.phone } }).then((r) => {
+      setInfo(r.data);
+      if (r.data.exists) setF((x) => ({ ...x, name: x.name || r.data.client.name }));
+    }).catch(() => {}), 400);
+    return () => clearTimeout(t);
+  }, [f.phone]);
+  const phoneOk = /^\+?\d{8,15}$/.test((f.phone || "").replace(/[\s-]/g, ""));
   useEffect(() => {
     Promise.all([api.get("/branches"), api.get("/services"), api.get("/stylists")]).then(([b, s, st]) => {
       setOpts({ branches: b.data, services: s.data.filter((x) => x.active !== false), stylists: st.data });
@@ -73,6 +84,11 @@ export function AppointmentForm({ defaultDate, onDone, client }) {
         <div><Label>Estilista (opcional)</Label><select className="field" value={f.stylist_id || ""} onChange={set("stylist_id")} data-testid="appt-stylist-select"><option value="">Cualquiera disponible</option>{opts.stylists.filter((s) => s.branch_id === f.branch_id).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
         <div><Label>Fecha</Label><input type="date" className="field" value={f.date} onChange={set("date")} data-testid="appt-date-input" /></div>
       </div>
+      {f.phone && !phoneOk && <p className="text-xs text-rose-600" data-testid="appt-phone-error">Teléfono inválido: use código de país y número, ej. +50255551234</p>}
+      {info?.exists && <div className="rounded-xl border bg-secondary/50 p-3 text-sm" data-testid="client-found">Clienta existente: <b>{info.client.name}</b> · Faltas: {info.no_shows}
+        {info.alert && <div className="mt-1 font-semibold text-rose-700" data-testid="noshow-alert">Supera el límite de {info.max_no_shows} faltas: considere exigir anticipo.</div>}
+        {info.allergies && <div className="mt-1 font-semibold text-rose-700" data-testid="allergy-alert">Alergias: {info.allergies}</div>}</div>}
+      {info && !info.exists && phoneOk && <p className="text-xs text-muted-foreground">Clienta nueva: se creará su ficha.</p>}
       {slots && (
         <div>
           <Label>Horarios disponibles</Label>
@@ -102,7 +118,7 @@ export function AppointmentForm({ defaultDate, onDone, client }) {
       )}
       <div className="flex items-center justify-between border-t pt-3">
         <div className="text-sm">Total estimado: <b data-testid="appt-total">{money(total)}</b></div>
-        <Button onClick={submit} disabled={busy || !f.time || !f.phone} data-testid="appt-submit-btn">{busy ? "Agendando..." : `Agendar ${f.time || ""}`}</Button>
+        <Button onClick={submit} disabled={busy || !f.time || !phoneOk} data-testid="appt-submit-btn">{busy ? "Agendando..." : `Agendar ${f.time || ""}`}</Button>
       </div>
     </div>
   );

@@ -24,14 +24,14 @@ export const money = (v, cur = "GTQ") =>
   `${cur === "USD" ? "$" : "Q"}${Number(v || 0).toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const STATUS = {
-  pending: "Pendiente", confirmed: "Confirmada", in_progress: "En curso", completed: "Completada",
+  pending: "Pendiente", confirmed: "Confirmada", in_progress: "En curso", completed: "Atendida",
   cancelled: "Cancelada", no_show: "No asistió",
 };
 export const STATUS_CLS = {
   pending: "bg-amber-100 text-amber-800 border-amber-300",
   confirmed: "bg-emerald-100 text-emerald-800 border-emerald-300",
   in_progress: "bg-sky-100 text-sky-800 border-sky-300",
-  completed: "bg-violet-100 text-violet-800 border-violet-300",
+  completed: "bg-slate-800 text-white border-slate-900",
   cancelled: "bg-rose-100 text-rose-800 border-rose-300",
   no_show: "bg-slate-200 text-slate-700 border-slate-300",
 };

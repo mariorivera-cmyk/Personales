@@ -5,7 +5,9 @@ import { useAuth } from "@/context/Auth";
 import { PageHeader, Panel, Label } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import CrudPage from "@/components/CrudPage";
+import CrudPage, { FieldInput } from "@/components/CrudPage";
+
+const N = (v) => (v === "" ? "" : Number(v));
 
 function General() {
   const { company, refresh } = useAuth();
@@ -16,6 +18,11 @@ function General() {
     try { await api.put("/company", f); toast.success("Configuración guardada"); refresh(); } catch (e) { toast.error(errMsg(e)); }
   };
   const rule = (s.deposit_rules || [])[0] || {};
+  const pol = s.policy || {};
+  const setP = (k, v) => setS("policy", { ...pol, [k]: v });
+  const legal = s.legal || {};
+  const social = f.social || {};
+  const photos = f.photo_urls || [];
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <Panel title="Empresa y WhatsApp">
@@ -39,6 +46,29 @@ function General() {
             <input className="field" value={(s.reminder_hours || []).join(", ")} onChange={(e) => setS("reminder_hours", e.target.value.split(",").map((x) => Number(x.trim())).filter(Boolean))} data-testid="settings-reminders-input" /></div>
           <div><Label>Mensaje para clientes si la cuenta está suspendida</Label>
             <textarea className="field h-20 py-2" value={s.suspension_message || ""} onChange={(e) => setS("suspension_message", e.target.value)} data-testid="settings-suspension-msg" /></div>
+        </div>
+      </Panel>
+      <Panel title="Portal público" testid="settings-portal">
+        <div className="space-y-3">
+          <div><Label>Descripción del salón</Label><textarea className="field h-20 py-2" value={f.description || ""} onChange={(e) => setF({ ...f, description: e.target.value })} data-testid="settings-description" /></div>
+          <div><Label>Logo</Label><FieldInput field={{ key: "logo_url", type: "image" }} value={f.logo_url} onChange={(v) => setF({ ...f, logo_url: v })} /></div>
+          {[0, 1, 2].map((i) => <div key={i}><Label>Foto {i + 1}{i === 0 ? " (portada)" : ""}</Label><FieldInput field={{ key: `photo_${i}`, type: "image" }} value={photos[i]} onChange={(v) => { const p = [...photos]; p[i] = v; setF({ ...f, photo_urls: p.filter(Boolean) }); }} /></div>)}
+          <div className="grid grid-cols-3 gap-2">{["instagram", "facebook", "tiktok"].map((k) => <div key={k}><Label>{k}</Label><input className="field" placeholder="https://..." value={social[k] || ""} onChange={(e) => setF({ ...f, social: { ...social, [k]: e.target.value } })} data-testid={`settings-${k}`} /></div>)}</div>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.show_team !== false} onChange={(e) => setF({ ...f, show_team: e.target.checked })} data-testid="settings-show-team" />Mostrar sección Equipo</label>
+        </div>
+      </Panel>
+      <Panel title="Políticas, recordatorios y textos legales" testid="settings-policy">
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2">
+            <div><Label>Cancelación gratis hasta (h)</Label><input type="number" className="field" value={pol.cancel_hours ?? 24} onChange={(e) => setP("cancel_hours", N(e.target.value))} data-testid="policy-cancel-hours" /></div>
+            <div><Label>Plazo para anticipo (h)</Label><input type="number" className="field" value={pol.deposit_hours ?? 24} onChange={(e) => setP("deposit_hours", N(e.target.value))} data-testid="policy-deposit-hours" /></div>
+            <div><Label>Límite de faltas</Label><input type="number" className="field" value={pol.max_no_shows ?? 2} onChange={(e) => setP("max_no_shows", N(e.target.value))} data-testid="policy-max-noshows" /></div>
+          </div>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!pol.deposit_after_no_shows} onChange={(e) => setP("deposit_after_no_shows", e.target.checked)} data-testid="policy-force-deposit" />Exigir anticipo (30%) a clientas que superen el límite de faltas</label>
+          <div><Label>Datos bancarios para anticipos</Label><textarea className="field h-16 py-2" value={pol.bank_info || ""} onChange={(e) => setP("bank_info", e.target.value)} data-testid="policy-bank-info" /></div>
+          <div><Label>Plantilla de recordatorio ({"{nombre} {servicio} {fecha} {hora} {estilista} {sucursal} {direccion} {enlace}"})</Label><textarea className="field h-20 py-2" value={s.reminder_template || ""} placeholder="Vacío = mensaje predeterminado" onChange={(e) => setS("reminder_template", e.target.value)} data-testid="settings-reminder-template" /></div>
+          <div><Label>Términos y condiciones</Label><textarea className="field h-16 py-2" value={legal.terms || ""} placeholder="Vacío = texto predeterminado" onChange={(e) => setS("legal", { ...legal, terms: e.target.value })} data-testid="settings-terms" /></div>
+          <div><Label>Política de privacidad</Label><textarea className="field h-16 py-2" value={legal.privacy || ""} placeholder="Vacío = texto predeterminado" onChange={(e) => setS("legal", { ...legal, privacy: e.target.value })} data-testid="settings-privacy" /></div>
         </div>
       </Panel>
       <div className="lg:col-span-2"><Button onClick={save} data-testid="settings-save-btn">Guardar configuración</Button></div>

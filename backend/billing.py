@@ -7,6 +7,7 @@ DEFAULT_SETTINGS = {
     "holidays": [], "deposit_rules": [{"min_minutes": 120, "percent": 30}], "reminder_hours": [48, 24, 2],
     "loyalty": {"points_per_100": 10, "redeem_value": 0.1, "referral_points": 50, "memberships": []},
     "portal": {"tagline": "Reserva tu cita en segundos", "hero": ""},
+    "policy": {"cancel_hours": 24, "deposit_hours": 24, "max_no_shows": 2, "deposit_after_no_shows": False, "bank_info": ""},
 }
 
 
@@ -160,6 +161,13 @@ async def run_billing():
         elif new == "past_due" and days in s.get("retry_days", [1, 3, 5]):
             await notify(c, "Aviso de suspensión", f"Su cuenta será suspendida en {grace - days} días si no se registra el pago.")
     return res
+
+
+async def trial_notices():
+    soon = (datetime.strptime(today(), "%Y-%m-%d") + timedelta(days=3)).strftime("%Y-%m-%d")
+    for c in await find("companies", {"status": "trial", "trial_ends": {"$lte": soon}, "trial_notice_sent": {"$ne": True}}):
+        await notify(c, "Su prueba está por terminar", f"Su periodo de prueba termina el {c['trial_ends']}. Active su plan registrando NIT y tarjeta.")
+        await db.companies.update_one({"id": c["id"]}, {"$set": {"trial_notice_sent": True}})
 
 
 async def statement(company):

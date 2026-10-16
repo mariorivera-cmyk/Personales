@@ -145,6 +145,39 @@ async def wa_send(cid, phone, text, kind="bot"):
                                      "text": text, "kind": kind, "created_at": now_iso()})
 
 
+def portal_url(slug, path=""):
+    return f"{os.environ['FRONTEND_URL']}/b/{slug}{path}"
+
+
+def make_client_token(cid, phone):
+    payload = {"sub": phone, "cid": cid, "type": "client", "exp": datetime.now(timezone.utc) + timedelta(minutes=30)}
+    return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm="HS256")
+
+
+def client_from_token(request: Request, cid):
+    try:
+        p = jwt.decode(request.headers.get("X-Client-Token", ""), os.environ["JWT_SECRET"], algorithms=["HS256"])
+    except jwt.InvalidTokenError:
+        raise HTTPException(401, "Verifique su teléfono con el código para continuar")
+    if p.get("type") != "client" or p.get("cid") != cid:
+        raise HTTPException(401, "Verifique su teléfono con el código para continuar")
+    return p["sub"]
+
+
+def valid_phone(p):
+    return 8 <= len(re.sub(r"\D", "", p or "")) <= 15
+
+
+def fill(tpl, **kw):
+    for k, v in kw.items():
+        tpl = tpl.replace("{" + k + "}", str(v))
+    return tpl
+
+
+async def notify_company(cid, title, text):
+    await db.notifications.insert_one({"id": uid(), "company_id": cid, "title": title, "text": text, "channels": ["panel"], "created_at": now_iso()})
+
+
 async def email_send(cid, to, subject, body):
     await db.email_outbox.insert_one({"id": uid(), "company_id": cid, "to": to, "subject": subject,
                                       "body": body, "created_at": now_iso()})

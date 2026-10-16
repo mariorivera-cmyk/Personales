@@ -1,5 +1,9 @@
 from datetime import datetime, timedelta
-from core import db, find, one, uid, now_iso, local_now, today, wa_send, norm_phone, insert
+from core import (db, find, one, uid, now_iso, local_now, today, wa_send, norm_phone, insert, valid_phone, portal_url, fill,
+                  notify_company, email_send)
+
+DEFAULT_REMINDER = ("Recordatorio: {nombre}, su cita de {servicio} es el {fecha} a las {hora} con {estilista} en {sucursal} "
+                    "({direccion}). Responda CONFIRMAR, REPROGRAMAR o CANCELAR, o gestione su cita aquí: {enlace}")
 
 STEP = 30
 
@@ -26,6 +30,16 @@ def fm(x):
 
 def weekday(d):
     return str(datetime.strptime(d, "%Y-%m-%d").weekday())
+
+
+def intervals(a):
+    if a.get("pause"):
+        return [(a["occ_start"], a["pause"][0]), (a["pause"][1], a["occ_end"])]
+    return [(a["occ_start"], a["occ_end"])]
+
+
+def ceil_step(x):
+    return ((x + STEP - 1) // STEP) * STEP
 
 
 def overlap(a1, a2, b1, b2):
@@ -61,6 +75,7 @@ async def day_slots(cid, branch_id, service_id, date, stylist_id=None, exclude=N
     appts = [a for a in appts if a["id"] != exclude]
     blocks = await find("blocks", {"company_id": cid, "start_date": {"$lte": date}, "end_date": {"$gte": date}})
     prep, dur, cl = int(svc.get("prep_minutes") or 0), int(svc["duration"]) + extra, int(svc.get("cleanup_minutes") or 0)
+    ps, pm = int(svc.get("pause_start") or 0), int(svc.get("pause_minutes") or 0)
     cap = int(branch.get("capacity") or 99)
     branch_appts = [a for a in appts if a["branch_id"] == branch_id]
     nowm = None
@@ -81,7 +96,8 @@ async def day_slots(cid, branch_id, service_id, date, stylist_id=None, exclude=N
             a1, a2 = t - prep, t + dur + cl
             if nowm is not None and t <= nowm:
                 continue
-            if any(overlap(a1, a2, x["occ_start"], x["occ_end"]) for x in mine):
+            cand = [(a1, t + ps), (t + ps + pm, a2)] if pm else [(a1, a2)]
+            if any(overlap(c1, c2, i1, i2) for x in mine for c1, c2 in cand for i1, i2 in intervals(x)):
                 continue
             if any(blocked(b, a1, a2) for b in blks):
                 continue
@@ -144,7 +160,9 @@ def deposit_for(company, svc, minutes, price):
 
 
 async def book(cid, *, branch_id, service_id, date, time, phone, name=None, stylist_id=None, addon_ids=None,
-               rec_type=None, source="staff", email=None, referred_by=None):
+               rec_type=None, source="staff", email=None, referred_by=None, group_id=None):
+    if not valid_phone(phone):
+        raise BookingError("Teléfono inválido: incluya el código de país y el número completo")
     if not valid_hm(time) or not isinstance(date, str):
         raise BookingError("Formato de fecha/hora inválido (HH:MM)")
     company = await one("companies", {"id": cid})
@@ -166,6 +184,12 @@ async def book(cid, *, branch_id, service_id, date, time, phone, name=None, styl
     since = (datetime.now() - timedelta(days=30)).isoformat()
     run = await db.campaign_runs.find_one({"company_id": cid, "client_ids": client["id"], "run_at": {"$gte": since}},
                                           sort=[("run_at", -1)])
+    pol = company.get("settings", {}).get("policy", {})
+    deposit = deposit_for(company, svc, dur, price)
+    faults = await db.appointments.count_documents({"client_id": client["id"], "status": "no_show"})
+    if pol.get("deposit_after_no_shows") and faults >= int(pol.get("max_no_shows", 2)):
+        deposit = max(deposit, round(price * 0.3, 2))
+    ps, pm = int(svc.get("pause_start") or 0), int(svc.get("pause_minutes") or 0)
     appt = {
         "id": uid(), "company_id": cid, "branch_id": branch_id, "branch_name": branch["name"],
         "stylist_id": st["stylist_id"], "stylist_name": st["stylist_name"], "client_id": client["id"],
@@ -173,8 +197,11 @@ async def book(cid, *, branch_id, service_id, date, time, phone, name=None, styl
         "service_name": svc["name"], "addon_ids": [a["id"] for a in addons], "addon_names": [a["name"] for a in addons],
         "date": date, "time": time, "end_time": fm(start + dur), "duration": dur,
         "occ_start": start - int(svc.get("prep_minutes") or 0), "occ_end": start + dur + int(svc.get("cleanup_minutes") or 0),
-        "price": price, "deposit_required": deposit_for(company, svc, dur, price), "deposit_paid": 0,
-        "status": "confirmed" if source == "staff" else "pending", "source": source,
+        "price": price, "deposit_required": deposit, "deposit_paid": 0,
+        "deposit_status": "pending" if deposit > 0 else None,
+        "deposit_due": (local_now() + timedelta(hours=float(pol.get("deposit_hours", 24)))).strftime("%Y-%m-%d %H:%M") if deposit > 0 else None,
+        "pause": [start + ps, start + ps + pm] if pm else None, "group_id": group_id, "review_token": uid() + uid(),
+        "status_log": [], "status": "confirmed" if source == "staff" and deposit <= 0 else "pending", "source": source,
         "rec_type": rec_type if addons else None, "campaign_id": run["campaign_id"] if run else None,
         "reminders_sent": [], "created_at": now_iso()}
     await insert("appointments", appt)
@@ -197,7 +224,8 @@ async def reschedule(cid, appt_id, date, time, stylist_id=None):
     upd = {"date": date, "time": time, "end_time": fm(start + a["duration"]), "stylist_id": match[0]["stylist_id"],
            "stylist_name": match[0]["stylist_name"], "occ_start": start - int(svc.get("prep_minutes") or 0),
            "occ_end": start + a["duration"] + int(svc.get("cleanup_minutes") or 0), "reminders_sent": [],
-           "status": "confirmed"}
+           "pause": [start + int(svc.get("pause_start") or 0), start + int(svc.get("pause_start") or 0) + int(svc["pause_minutes"])] if svc.get("pause_minutes") else None,
+           "status": a["status"] if a.get("deposit_status") == "pending" else "confirmed"}
     await db.appointments.update_one({"id": appt_id}, {"$set": upd})
     await notify_waitlist(cid, a)
     return {**a, **upd}
@@ -214,19 +242,97 @@ async def notify_waitlist(cid, appt):
                                                                  "offered_time": appt["time"]}})
 
 
-async def set_status(cid, appt_id, status):
+async def stock_move(cid, pid, delta, reason, ref=""):
+    p = await one("products", {"id": pid, "company_id": cid})
+    if not p:
+        return
+    await db.products.update_one({"id": pid}, {"$inc": {"stock": delta}})
+    await insert("inventory_moves", {"id": uid(), "company_id": cid, "product_id": pid, "product_name": p["name"], "qty": delta,
+                                     "reason": reason, "ref": ref, "created_at": now_iso()})
+
+
+async def set_status(cid, appt_id, status, user=None, reason="", by_client=False):
     a = await one("appointments", {"id": appt_id, "company_id": cid})
     if not a:
         raise BookingError("Cita no encontrada")
-    await db.appointments.update_one({"id": appt_id}, {"$set": {"status": status, f"{status}_at": now_iso()}})
+    if a["status"] == "completed" and status != "completed" and (user or {}).get("role") not in ("company_admin", "super_admin"):
+        raise BookingError("La cita ya fue atendida: solo un administrador puede corregirla")
+    company = await one("companies", {"id": cid})
+    pol = company.get("settings", {}).get("policy", {})
+    upd = {"status": status, f"{status}_at": now_iso()}
+    if status == "cancelled":
+        upd["cancel_reason"] = reason
+        hrs = (datetime.strptime(f"{a['date']} {a['time']}", "%Y-%m-%d %H:%M") - local_now()).total_seconds() / 3600
+        if by_client and hrs < float(pol.get("cancel_hours", 24)):
+            upd["late_cancel"] = True
+    log = {"status": status, "by": (user or {}).get("email") or ("cliente" if by_client else "sistema"), "at": now_iso(), "reason": reason}
+    await db.appointments.update_one({"id": appt_id}, {"$set": upd, "$push": {"status_log": log}})
     if status == "cancelled":
         await notify_waitlist(cid, a)
+        if upd.get("late_cancel"):
+            await wa_send(cid, a["client_phone"], f"Su cita fue cancelada con menos de {pol.get('cancel_hours', 24)} horas de anticipación. "
+                          "Según nuestra política se registra como cancelación tardía.", "policy")
     if status == "completed" and a["status"] != "completed":
-        company = await one("companies", {"id": cid})
         if "loyalty" in company.get("enabled_modules", []):
             per = float(company.get("settings", {}).get("loyalty", {}).get("points_per_100", 10))
             await db.clients.update_one({"id": a["client_id"]}, {"$inc": {"points": int(a["price"] / 100 * per)}})
-    return {**a, "status": status}
+        for s in await find("services", {"id": {"$in": [a["service_id"]] + a.get("addon_ids", [])}}):
+            for item in s.get("consumes") or []:
+                await stock_move(cid, item["product_id"], -float(item.get("qty") or 1), f"Consumo {s['name']}", a["id"])
+        await wa_send(cid, a["client_phone"], f"Gracias por visitarnos, {a['client_name']}. ¿Cómo fue su experiencia? Califíquenos aquí: "
+                      f"{portal_url(company['slug'], '/resena/' + a.get('review_token', ''))}", "review")
+    return {**a, **upd}
+
+
+async def release_unpaid():
+    now = local_now().strftime("%Y-%m-%d %H:%M")
+    for a in await find("appointments", {"deposit_status": "pending", "status": "pending", "deposit_due": {"$lte": now}}):
+        await set_status(a["company_id"], a["id"], "cancelled", reason="Anticipo no recibido en el plazo")
+        await db.appointments.update_one({"id": a["id"]}, {"$set": {"deposit_status": "expired"}})
+        await wa_send(a["company_id"], a["client_phone"], f"Su cita de {a['service_name']} del {a['date']} a las {a['time']} se liberó "
+                      "porque no recibimos el anticipo a tiempo. Puede reservar de nuevo cuando guste.", "policy")
+        await notify_company(a["company_id"], "Cita liberada", f"{a['client_name']} no envió el anticipo ({a['date']} {a['time']}).")
+
+
+async def multi_slots(cid, branch_id, date, lines):
+    svcs = [await one("services", {"id": ln["service_id"], "company_id": cid}) for ln in lines]
+    if not lines or not all(svcs):
+        return []
+    pools = [await day_slots(cid, branch_id, ln["service_id"], date, ln.get("stylist_id") or None) for ln in lines]
+    out, seen = [], set()
+    for first in pools[0]:
+        if first["time"] in seen:
+            continue
+        plan, t, prev, ok = [], m(first["time"]), None, True
+        for i, s in enumerate(svcs):
+            cands = [first] if i == 0 else sorted([x for x in pools[i] if t <= m(x["time"]) <= t + 60], key=lambda x: (m(x["time"]), x["stylist_id"] != prev))
+            if not cands:
+                ok = False
+                break
+            pick = cands[0]
+            start = m(pick["time"])
+            end = start + int(s["duration"])
+            plan.append({"service_id": s["id"], "service_name": s["name"], "stylist_id": pick["stylist_id"], "stylist_name": pick["stylist_name"],
+                         "time": fm(start), "end_time": fm(end), "price": s["price"]})
+            prev, t = pick["stylist_id"], ceil_step(end)
+        if ok:
+            seen.add(first["time"])
+            out.append({"time": first["time"], "end_time": plan[-1]["end_time"], "plan": plan, "total": sum(p["price"] for p in plan)})
+    return out
+
+
+async def book_multi(cid, *, branch_id, date, plan, phone, **kw):
+    created, gid = [], uid()
+    try:
+        for i, p in enumerate(plan):
+            created.append(await book(cid, branch_id=branch_id, service_id=p["service_id"], date=date, time=p["time"], phone=phone,
+                                      stylist_id=p["stylist_id"], group_id=gid, name=kw.get("name"), email=kw.get("email"),
+                                      source=kw.get("source", "portal"), referred_by=kw.get("referred_by") if i == 0 else None,
+                                      addon_ids=kw.get("addon_ids") if i == 0 else None, rec_type=kw.get("rec_type") if i == 0 else None))
+    except BookingError:
+        await db.appointments.delete_many({"id": {"$in": [a["id"] for a in created]}})
+        raise
+    return created
 
 
 async def suggestions(cid, service_id):
@@ -279,10 +385,17 @@ async def run_reminders(cid=None):
         pending = [h for h in hours if 0 < hrs <= h and h not in a.get("reminders_sent", [])]
         if not pending:
             continue
-        await wa_send(a["company_id"], a["client_phone"],
-                      f"Recordatorio ({min(pending)}h): {a['client_name']}, tu cita de {a['service_name']} es el {a['date']} "
-                      f"a las {a['time']} en {a['branch_name']} con {a['stylist_name']}. Responde CONFIRMAR, REPROGRAMAR o CANCELAR.",
-                      "reminder")
+        cl = await one("clients", {"id": a["client_id"]}) or {}
+        br = await one("branches", {"id": a["branch_id"]}) or {}
+        text = fill(company.get("settings", {}).get("reminder_template") or DEFAULT_REMINDER, nombre=a["client_name"],
+                    servicio=a["service_name"], fecha=a["date"], hora=a["time"], estilista=a["stylist_name"], sucursal=a["branch_name"],
+                    direccion=br.get("address") or "", enlace=portal_url(company["slug"]), horas=min(pending))
+        if not cl.get("no_whatsapp"):
+            await wa_send(a["company_id"], a["client_phone"], text, "reminder")
+        elif cl.get("email"):
+            await email_send(a["company_id"], cl["email"], "Recordatorio de cita", text)
+        else:
+            await notify_company(a["company_id"], "Recordatorio no entregado", f"{a['client_name']} no tiene WhatsApp ni correo registrado.")
         await db.appointments.update_one({"id": a["id"]}, {"$addToSet": {"reminders_sent": {"$each": pending}}})
         sent += 1
     return sent

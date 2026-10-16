@@ -5,7 +5,44 @@ import { api, errMsg, DAYS } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { PageHeader, EmptyState } from "@/components/Common";
+import { PageHeader, EmptyState, Loader } from "@/components/Common";
+
+const B = process.env.REACT_APP_BACKEND_URL;
+
+function ImageInput({ id, value, onChange }) {
+  const up = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    try { const r = await api.post("/company/media", fd); onChange(r.data.url); } catch (err) { toast.error(errMsg(err)); }
+  };
+  return (
+    <div className="flex items-center gap-3">
+      {value && <img src={value.startsWith("/api") ? B + value : value} alt="" className="h-14 w-14 rounded-lg object-cover" />}
+      <input type="file" accept="image/*" onChange={up} data-testid={id} className="text-xs" />
+      {value && <button type="button" className="text-xs underline" onClick={() => onChange("")}>Quitar</button>}
+    </div>
+  );
+}
+
+function ConsumptionInput({ id, value, onChange }) {
+  const opts = useOptions({ source: "/products" });
+  const v = value || [];
+  const set = (i, k, x) => onChange(v.map((r, j) => (j === i ? { ...r, [k]: x } : r)));
+  return (
+    <div className="space-y-1" data-testid={id}>
+      {v.map((r, i) => (
+        <div key={i} className="flex gap-2">
+          <select className="field" value={r.product_id} onChange={(e) => set(i, "product_id", e.target.value)}><option value="">— Producto —</option>{opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+          <input type="number" step="0.1" className="field w-24" value={r.qty} onChange={(e) => set(i, "qty", Number(e.target.value))} />
+          <button type="button" onClick={() => onChange(v.filter((_, j) => j !== i))}><Trash2 className="h-4 w-4 text-rose-600" /></button>
+        </div>
+      ))}
+      <button type="button" className="text-xs text-primary" onClick={() => onChange([...v, { product_id: "", qty: 1 }])}>+ Producto consumido</button>
+    </div>
+  );
+}
 
 function useOptions(field) {
   const [opts, setOpts] = useState(field.options || []);
@@ -84,6 +121,8 @@ export function FieldInput({ field, value, onChange }) {
         ))}
       </div>
     );
+  if (field.type === "image") return <ImageInput id={id} value={value} onChange={onChange} />;
+  if (field.type === "consumption") return <ConsumptionInput id={id} value={value} onChange={onChange} />;
   if (field.type === "switch") return <Switch data-testid={id} checked={value !== false} onCheckedChange={onChange} />;
   if (field.type === "hours") return <HoursEditor value={value} onChange={onChange} optional={field.optional} />;
   if (field.type === "list")
@@ -110,7 +149,7 @@ export function FormDialog({ open, onOpenChange, title, fields, initial, onSubmi
         <DialogHeader><DialogTitle className="font-heading">{title}</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {fields.filter((f) => !f.hideIf || !f.hideIf(form)).map((f) => (
-            <div key={f.key} className={f.full || ["textarea", "hours", "multi"].includes(f.type) ? "sm:col-span-2" : ""}>
+            <div key={f.key} className={f.full || ["textarea", "hours", "multi", "consumption", "image"].includes(f.type) ? "sm:col-span-2" : ""}>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">{f.label}</label>
               <FieldInput field={f} value={form[f.key]} onChange={(v) => setForm((s) => ({ ...s, [f.key]: v }))} />
             </div>
@@ -124,10 +163,10 @@ export function FormDialog({ open, onOpenChange, title, fields, initial, onSubmi
   );
 }
 
-export default function CrudPage({ title, subtitle, endpoint, fields, columns, testid, rowActions, canWrite = true, defaults = {}, embedded }) {
-  const [rows, setRows] = useState([]);
+export default function CrudPage({ title, subtitle, endpoint, fields, columns, testid, rowActions, canWrite = true, defaults = {}, embedded, extraActions }) {
+  const [rows, setRows] = useState(null);
   const [edit, setEdit] = useState(null);
-  const load = useCallback(() => api.get(endpoint).then(({ data }) => setRows(data)).catch((e) => toast.error(errMsg(e))), [endpoint]);
+  const load = useCallback(() => api.get(endpoint).then(({ data }) => setRows(data)).catch((e) => { setRows([]); toast.error(errMsg(e)); }), [endpoint]);
   useEffect(() => { load(); }, [load]);
   const save = async (form) => {
     if (form.id) await api.put(`${endpoint}/${form.id}`, form);
@@ -141,10 +180,11 @@ export default function CrudPage({ title, subtitle, endpoint, fields, columns, t
   };
   return (
     <div data-testid={`${testid}-page`}>
-      {!embedded && <PageHeader title={title} subtitle={subtitle} action={canWrite && (
-        <Button onClick={() => setEdit({ ...defaults })} data-testid={`${testid}-new-btn`}><Plus className="mr-1 h-4 w-4" />Nuevo</Button>)} />}
+      {!embedded && <PageHeader title={title} subtitle={subtitle} action={<>{extraActions && extraActions(load)}{canWrite && (
+        <Button onClick={() => setEdit({ ...defaults })} data-testid={`${testid}-new-btn`}><Plus className="mr-1 h-4 w-4" />Nuevo</Button>)}</>} />}
       {embedded && canWrite && <div className="mb-3 flex justify-end"><Button size="sm" onClick={() => setEdit({ ...defaults })} data-testid={`${testid}-new-btn`}><Plus className="mr-1 h-4 w-4" />Nuevo</Button></div>}
-      {rows.length === 0 ? <EmptyState text="Aún no hay registros." /> : (
+      {rows === null ? <Loader /> : rows.length === 0 ? <EmptyState text={`Aún no hay registros en ${title || "esta sección"}. Cree el primero para comenzar.`}
+        action={canWrite && <Button size="sm" onClick={() => setEdit({ ...defaults })} data-testid={`${testid}-empty-create`}><Plus className="mr-1 h-4 w-4" />Crear el primero</Button>} /> : (
         <div className="overflow-x-auto rounded-2xl border bg-white">
           <table className="w-full text-sm" data-testid={`${testid}-table`}>
             <thead className="bg-secondary/60 text-left text-xs uppercase tracking-wider text-slate-500">

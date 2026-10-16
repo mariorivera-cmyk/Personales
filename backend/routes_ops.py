@@ -2,7 +2,7 @@ import base64
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Body, HTTPException, UploadFile, File, Form, Response
 from core import (db, find, one, uid, now_iso, today, insert, clean, audit, hash_pw, guard, ctx, enc, dec, wa_send,
-                  email_send, MANAGERS, STAFF, ALL_STAFF, norm_phone)
+                  email_send, MANAGERS, STAFF, ALL_STAFF, norm_phone, valid_phone)
 import engine as E
 
 r = APIRouter(prefix="/api")
@@ -72,7 +72,8 @@ async def get_company(c=Depends(ctx)):
 
 @r.put("/company")
 async def put_company(body: dict = Body(...), c=Depends(guard(("company_admin",)))):
-    upd = {k: v for k, v in body.items() if k in ("name", "phone", "whatsapp_number", "slug", "logo", "address")}
+    upd = {k: v for k, v in body.items() if k in ("name", "phone", "whatsapp_number", "slug", "logo", "address", "description", "logo_url",
+                                                "photo_urls", "social", "show_team")}
     if "whatsapp_number" in upd:
         upd["whatsapp_number"] = norm_phone(upd["whatsapp_number"])
     if "settings" in body:
@@ -141,6 +142,8 @@ async def list_clients(q: str = "", c=Depends(guard(ALL_STAFF))):
 
 @r.post("/clients")
 async def create_client(body: dict = Body(...), c=Depends(guard(STAFF))):
+    if not valid_phone(body.get("phone")):
+        raise HTTPException(400, "Teléfono inválido: incluya el código de país y el número completo")
     cl = await E.upsert_client(c["cid"], body["phone"], body.get("name"), body.get("email"), body.get("referred_by"))
     upd = {k: body[k] for k in ("birthdate", "gender", "email") if body.get(k)}
     if upd:
@@ -159,6 +162,7 @@ async def client_detail(oid: str, c=Depends(guard(ALL_STAFF))):
     dates = sorted(datetime.strptime(a["date"], "%Y-%m-%d") for a in done)
     freq = round(sum((dates[i + 1] - dates[i]).days for i in range(len(dates) - 1)) / (len(dates) - 1)) if len(dates) > 1 else None
     files = await db.client_files.find({"client_id": oid}, {"_id": 0, "data": 0}).to_list(100)
+    await audit(c["user"], c["cid"], "view", "client_file", cl["name"])
     return {"client": client_out(cl), "appointments": appts, "files": files,
             "stats": {"visits": len(done), "spent": sum(a["price"] for a in done), "frequency_days": freq,
                       "cancellations": sum(1 for a in appts if a["status"] == "cancelled"),
@@ -169,8 +173,8 @@ async def client_detail(oid: str, c=Depends(guard(ALL_STAFF))):
 
 
 @r.put("/clients/{oid}")
-async def update_client(oid: str, body: dict = Body(...), c=Depends(guard(STAFF))):
-    upd = {k: v for k, v in body.items() if k in ("name", "email", "birthdate", "gender", "membership")}
+async def update_client(oid: str, body: dict = Body(...), c=Depends(guard(ALL_STAFF))):
+    upd = {k: v for k, v in body.items() if k in ("name", "email", "birthdate", "gender", "membership", "no_whatsapp", "photo_consent", "data_consent")}
     if "notes" in body:
         upd["notes"] = {k: enc(v) for k, v in body["notes"].items()}
     await db.clients.update_one({"id": oid, "company_id": c["cid"]}, {"$set": upd})
@@ -179,12 +183,15 @@ async def update_client(oid: str, body: dict = Body(...), c=Depends(guard(STAFF)
 
 
 @r.post("/clients/{oid}/files")
-async def upload_file(oid: str, file: UploadFile = File(...), kind: str = Form("documento"), c=Depends(guard(STAFF))):
+async def upload_file(oid: str, file: UploadFile = File(...), kind: str = Form("documento"), appointment_id: str = Form(""), c=Depends(guard(ALL_STAFF))):
+    cl = await one("clients", {"id": oid, "company_id": c["cid"]})
+    if kind in ("foto", "antes", "despues") and cl and cl.get("photo_consent") is False:
+        raise HTTPException(400, "La clienta no autorizó fotografías")
     data = await file.read()
     if len(data) > 3 * 1024 * 1024:
         raise HTTPException(400, "Archivo máximo 3MB")
     doc = {"id": uid(), "company_id": c["cid"], "client_id": oid, "name": file.filename, "kind": kind,
-           "content_type": file.content_type, "size": len(data), "created_at": now_iso()}
+           "content_type": file.content_type, "size": len(data), "appointment_id": appointment_id, "created_at": now_iso()}
     await db.client_files.insert_one({**doc, "data": base64.b64encode(data).decode()})
     await audit(c["user"], c["cid"], "upload", "client_file", file.filename)
     return doc
@@ -260,7 +267,7 @@ async def appt_status(oid: str, body: dict = Body(...), c=Depends(guard(ALL_STAF
     if st not in ("pending", "confirmed", "in_progress", "completed", "cancelled", "no_show"):
         raise HTTPException(400, "Estado inválido")
     try:
-        a = await E.set_status(c["cid"], oid, st)
+        a = await E.set_status(c["cid"], oid, st, c["user"], body.get("reason", ""))
     except E.BookingError as e:
         booking_error(e)
     await audit(c["user"], c["cid"], "status", "appointment", f"{oid} -> {st}")
@@ -294,7 +301,7 @@ async def dashboard(c=Depends(guard(STAFF))):
     month = [a for a in appts if a["date"] >= ms]
     done = [a for a in month if a["status"] == "completed"]
     todays = [a for a in appts if a["date"] == td]
-    sales = sum(a["price"] for a in done)
+    sales = sum(a.get("paid_net", a["price"]) for a in done)
     wd = E.weekday(td)
     avail = 0
     for b in await find("branches", {"company_id": cid}):
@@ -317,7 +324,7 @@ async def dashboard(c=Depends(guard(STAFF))):
     series = []
     for i in range(13, -1, -1):
         d = (datetime.strptime(td, "%Y-%m-%d") - timedelta(days=i)).strftime("%Y-%m-%d")
-        series.append({"date": d[5:], "ventas": sum(a["price"] for a in appts if a["date"] == d and a["status"] == "completed"),
+        series.append({"date": d[5:], "ventas": sum(a.get("paid_net", a["price"]) for a in appts if a["date"] == d and a["status"] == "completed"),
                        "citas": sum(1 for a in appts if a["date"] == d)})
     return {"today": len(todays), "today_list": sorted(todays, key=lambda a: a["time"]),
             "future": sum(1 for a in appts if a["date"] > td and a["status"] in ("pending", "confirmed")),
@@ -346,7 +353,7 @@ async def reports(group: str = "branch", start: str = "", end: str = "", c=Depen
         if a["status"] in ("completed", "cancelled", "no_show"):
             x[a["status"]] += 1
         if a["status"] == "completed":
-            x["sales"] += a["price"]
+            x["sales"] += a.get("paid_net", a["price"])
             x["cost"] += costs.get(a["service_id"], 0)
             x["minutes"] += a["duration"]
     out = []
