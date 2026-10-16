@@ -54,6 +54,10 @@ Super Administrador, Administrador de Empresa, Gerente de Sucursal, Recepcionist
 - Estilistas: campo "Servicios que realiza" (varios). Disponibilidad filtra por él; si el servicio tenía lista de autorizados, se agrega la estilista automáticamente.
 - Checkboxes más grandes en plantillas y selecciones múltiples (etiqueta clicable). Probado: iteration_5 + verificación de correcciones.
 
+## Implemented (2026-10-16) — Arranque obligatorio para salones nuevos
+- Mientras no se completen los 4 pasos obligatorios (servicios, estilistas, datos del salón + direcciones, reglas), el menú muestra solo Dashboard, Servicios, Sucursales, Estilistas, Configuración y Mi suscripción; otras rutas redirigen; portal público y bot de WhatsApp quedan en pausa. Al terminar se marca setup_complete (permanente) y se desbloquea al instante.
+- "Guardar y confirmar reglas" permite aceptar las reglas sugeridas. Salones existentes completos se marcaron automáticamente. Probado: iteration_6 y 7.
+
 ## Backlog
 - P0: Conectar WhatsApp Cloud API real (token + phone number id por empresa); pasarela Recurrente; FEL con INFILE/Digifact.
 - P1: Cobro de anticipos a clientes finales (sección 7); emails reales (Resend); subdominio por empresa; object storage para archivos.

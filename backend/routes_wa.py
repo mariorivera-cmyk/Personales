@@ -34,7 +34,7 @@ async def context_for(company, phone):
         "servicios": [{"id": s["id"], "nombre": s["name"], "duracion_min": s["duration"], "precio": s["price"],
                        "categoria": s.get("category", "")} for s in services],
         "sucursales": [{"id": b["id"], "nombre": b["name"], "direccion": b.get("address", "")} for b in branches],
-        "estilistas": [{"id": s["id"], "nombre": s["name"], "sucursal_id": s["branch_id"], "especialidades": s.get("specialties", "")} for s in stylists],
+        "estilistas": [{"id": s["id"], "nombre": s["name"], "sucursal_id": s.get("branch_id"), "especialidades": s.get("specialties", "")} for s in stylists],
         "reglas_venta": [{"tipo": "cross-selling" if x["type"] == "cross" else "upselling", "si_reserva": names.get(x["trigger_service_id"]),
                           "sugerir_id": x["suggested_service_id"], "sugerir": names.get(x["suggested_service_id"]), "mensaje": x.get("message", "")} for x in rules],
         "cliente": {"nombre": client["name"], "puntos": client.get("points", 0),

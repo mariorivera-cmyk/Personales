@@ -1,0 +1,29 @@
+{
+  "summary": "Retest of the setup-gate fixes from iteration_6. Backend: 13/13 pytest pass (test_setup_gate.py + new test_setup_gate_v2.py). UI: all requested flows pass. (1) New salon via the /signup UI: Config > Reglas button reads 'Guardar y confirmar reglas'; clicking it with no changes fires POST /api/salon-rules/reviewed, shows the toast 'Reglas sugeridas confirmadas', the rules step is marked done and the button changes to 'Guardar reglas'. A second click shows 'No hay cambios por guardar'. (2) The last step done on a non-dashboard page unlocks the full nav in place (6 -> 16 items, setup-nav-note gone, portal-link appears). Checked for rules confirm in Config, for adding a stylist in Estilistas (CrudPage), and for the description save in Config General. The '¡Su salón está configurado!' toast shows exactly once each time and does not repeat on the next Dashboard visit. (3) WhatsApp inbound for an incomplete company (whatsapp module enabled by default) replies 'Gracias por escribirnos. Un asesor le atenderá pronto.' After completion the real bot replies. (4) Super admin inside an incomplete company: portal-link hidden (0). Inside bellavida: portal-link shown. (5) Regression: incomplete salon has restricted nav; /app/agenda, clientes, caja, reportes and whatsapp redirect to /app; portal API 403 and portal page shows 'preparando'. Bellavida admin has the full nav, no setup note, no setup toast, and agenda is reachable.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/wa/inbound -> bot_reply/context_for (routes_wa.py:37)", "issue": "Returns 500 KeyError 'branch_id' when any stylist of the company has no branch_id. The generic crud('stylists') in routes_ops.py:56 accepts stylists without branch_id (an API POST without it succeeds). The UI form likely always sends it, so this is low risk, but one bad record breaks the WhatsApp bot for the whole salon. Fix: use s.get('branch_id') in context_for, and/or require branch_id on stylist create."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_setup_gate.py", "/app/backend/tests/test_setup_gate_v2.py", "/app/test_reports/pytest/pytest_setup_gate_v2.xml"],
+  "action_items": [
+    "LOW: Make routes_wa.context_for tolerant of stylists without branch_id (s.get('branch_id')), or validate branch_id as required in the stylists create/update endpoint."
+  ],
+  "critical_code_review_comments": [
+    "Auth.checkSetup reads `company` from the render closure. This works today because callers only run it while incomplete. CompanySettings calls `await refresh()` and then checkSetup() with the stale closure; this is harmless but redundant.",
+    "The setup gate is still frontend-only for company APIs (agenda/clients/POS reachable via API while incomplete). The portal and the WA bot are gated in the backend."
+  ],
+  "updated_files": ["/app/backend/tests/test_setup_gate_v2.py"],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (all 5 requested flows)"},
+  "seed_data_creation": "Created TEST_ companies (API tests: Gate2, Setup API; UI: UI Rules, UI Sty, UI Desc, UI SA). All were removed with tests/cleanup_v2.py. Remaining companies: bellavida, salon-retest-trinity, wwwpruebacom (untouched).",
+  "test_credentials": "From /app/memory/test_credentials.md: mario.rivera@gmail.com/Admin2026! (super_admin) and admin@bellavida.com/Demo2026! both work.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "/signup renders SignupSimple (no card, no terms checkbox; fields signup-company_name/email/password/whatsapp_number/slug-input). New companies have the whatsapp module enabled. Use test_setup_gate*.py for regression and run tests/cleanup_v2.py afterwards. When creating stylists via the API, pass branch_id, or the WA bot returns 500."
+}
