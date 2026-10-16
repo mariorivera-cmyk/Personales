@@ -209,7 +209,7 @@ async def public_company(slug):
     c = await one("companies", {"slug": slug})
     if not c:
         raise HTTPException(404, "Salón no encontrado")
-    if c["status"] in ("suspended", "cancelled") or "portal" not in c.get("enabled_modules", []):
+    if c["status"] in ("suspended", "cancelled", "paused") or "portal" not in c.get("enabled_modules", []):
         raise HTTPException(403, c.get("settings", {}).get("suspension_message") or SUSPENDED_MSG)
     if not c.get("setup_complete"):
         raise HTTPException(403, "Este salón aún está preparando su portal de reservas. Vuelva pronto.")

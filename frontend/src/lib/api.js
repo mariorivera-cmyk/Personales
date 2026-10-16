@@ -37,11 +37,11 @@ export const STATUS_CLS = {
 };
 export const CO_STATUS = {
   trial: "Prueba", active: "Activa", past_due: "Morosa", suspended_partial: "Suspensión parcial",
-  suspended: "Suspendida", cancelled: "Cancelada",
+  suspended: "Suspendida", paused: "En pausa", cancelled: "Cancelada",
 };
 export const CO_CLS = {
   trial: "bg-sky-100 text-sky-800", active: "bg-emerald-100 text-emerald-800", past_due: "bg-amber-100 text-amber-800",
-  suspended_partial: "bg-orange-100 text-orange-800", suspended: "bg-rose-100 text-rose-800", cancelled: "bg-slate-200 text-slate-700",
+  suspended_partial: "bg-orange-100 text-orange-800", suspended: "bg-rose-100 text-rose-800", paused: "bg-violet-100 text-violet-800", cancelled: "bg-slate-200 text-slate-700",
 };
 export const ROLES = {
   super_admin: "Super Administrador", company_admin: "Administrador de Empresa", branch_manager: "Gerente de Sucursal",

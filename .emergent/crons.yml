@@ -1,0 +1,9 @@
+crons:
+  - name: purge-cancelled
+    description: "Deletes data of companies cancelled more than 2 months ago, daily at 3am Guatemala"
+    cron: "0 3 * * *"
+    timezone: "America/Guatemala"
+    endpoint: "{{BASE_URL}}/api/cron/purge-cancelled"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true

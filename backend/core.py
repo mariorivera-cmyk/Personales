@@ -118,6 +118,8 @@ async def ctx(request: Request, user=Depends(get_user)):
     company = await one("companies", {"id": cid})
     if not company:
         raise HTTPException(404, "Empresa no encontrada")
+    if company["status"] in ("paused", "cancelled") and user["role"] != "super_admin":
+        raise HTTPException(403, "La cuenta de su empresa está " + ("en pausa" if company["status"] == "paused" else "cancelada") + ". Comuníquese con soporte.")
     locked = company["status"] in ("suspended_partial", "suspended", "cancelled")
     if request.method != "GET" and locked and user["role"] != "super_admin" and not request.url.path.startswith("/api/billing"):
         raise HTTPException(402, "Cuenta suspendida por falta de pago: acceso de solo lectura")

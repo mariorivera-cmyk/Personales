@@ -1,12 +1,18 @@
 import io
+import os
 import re
+import hmac
+import asyncio
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, Body, HTTPException, Response
+from fastapi import APIRouter, Depends, Body, HTTPException, Response, Request
 from core import db, find, one, uid, now_iso, today, insert, clean, audit, hash_pw, check_pw, make_token, get_user, super_admin, guard, ctx
 from billing import (DEFAULT_SETTINGS, psettings, breakdown, monthly_value, create_invoice, charge, mark_paid, prorate_module,
                      run_billing, statement, invoice_pdf, cycle_items)
 
 r = APIRouter(prefix="/api")
+BLOCKED = {"paused": "La cuenta de su empresa está en pausa. Comuníquese con soporte de SalonFlow.",
+           "cancelled": "La cuenta de su empresa fue cancelada. Comuníquese con soporte de SalonFlow si desea reactivarla."}
+STATUS_LABEL = {"trial": "Prueba (30 días)", "active": "Activa", "paused": "En pausa", "cancelled": "Cancelada"}
 
 
 @r.post("/auth/login")
@@ -22,6 +28,10 @@ async def login(response: Response, body: dict = Body(...)):
         await db.login_attempts.update_one({"identifier": ident}, {"$set": {"count": cnt, "until": (datetime.utcnow() + timedelta(minutes=15)).isoformat()}}, upsert=True)
         raise HTTPException(401, "Correo o contraseña incorrectos")
     await db.login_attempts.delete_one({"identifier": ident})
+    if u["role"] != "super_admin" and u.get("company_id"):
+        co = await one("companies", {"id": u["company_id"]})
+        if co and co["status"] in BLOCKED:
+            raise HTTPException(403, BLOCKED[co["status"]])
     u.pop("password_hash")
     token = make_token(u)
     response.set_cookie("access_token", token, httponly=True, secure=True, samesite="none", max_age=43200, path="/")
@@ -176,12 +186,89 @@ async def create_company(body: dict = Body(...), u=Depends(super_admin)):
 
 @r.put("/admin/companies/{cid}")
 async def update_company(cid: str, body: dict = Body(...), u=Depends(super_admin)):
-    allowed = {k: v for k, v in body.items() if k in ("status", "plan_id", "billing_cycle", "coupon_pct", "coupon_code", "wa_packs",
+    allowed = {k: v for k, v in body.items() if k in ("plan_id", "billing_cycle", "coupon_pct", "coupon_code", "wa_packs",
                                                        "next_billing_date", "trial_ends", "name", "nit", "currency", "whatsapp_number")}
     await db.companies.update_one({"id": cid}, {"$set": allowed})
     await history(cid, u, "Cambio: " + ", ".join(f"{k}={v}" for k, v in allowed.items()))
     await audit(u, cid, "update", "company", allowed)
     return await one("companies", {"id": cid})
+
+
+async def set_company_status(cid, status, u, reason=""):
+    c = await one("companies", {"id": cid})
+    if not c:
+        raise HTTPException(404, "Empresa no encontrada")
+    if status not in STATUS_LABEL:
+        raise HTTPException(400, "Estado inválido")
+    td = datetime.strptime(today(), "%Y-%m-%d")
+    upd, unset = {"status": status, "status_reason": reason, "status_changed_at": now_iso()}, {}
+    if status == "trial":
+        upd["trial_ends"] = (td + timedelta(days=30)).strftime("%Y-%m-%d")
+        unset["trial_notice_sent"] = ""
+    if status == "paused":
+        upd["paused_at"] = now_iso()
+    if status == "cancelled":
+        upd["cancelled_at"] = now_iso()
+        upd["purge_after"] = (td + timedelta(days=60)).strftime("%Y-%m-%d")
+    else:
+        unset["purge_after"] = ""
+    if status in ("active", "trial"):
+        unset.update({"past_due_since": ""})
+    await db.companies.update_one({"id": cid}, {"$set": upd, **({"$unset": unset} if unset else {})})
+    note = f"Estado: {STATUS_LABEL.get(c['status'], c['status'])} → {STATUS_LABEL[status]}" + (f" ({reason})" if reason else "")
+    await history(cid, u, note)
+    await audit(u, cid, "status", "company", note)
+    return await one("companies", {"id": cid})
+
+
+@r.post("/admin/companies/{cid}/status")
+async def change_status(cid: str, body: dict = Body(...), u=Depends(super_admin)):
+    return await set_company_status(cid, body.get("status"), u, (body.get("reason") or "").strip())
+
+
+async def purge_company(cid):
+    for name in await db.list_collection_names():
+        if name not in ("companies", "deleted_companies"):
+            await db[name].delete_many({"$or": [{"company_id": cid}, {"cid": cid}]})
+    await db.companies.delete_one({"id": cid})
+
+
+@r.delete("/admin/companies/{cid}")
+async def delete_company(cid: str, body: dict = Body(default={}), u=Depends(super_admin)):
+    c = await one("companies", {"id": cid})
+    if not c:
+        raise HTTPException(404, "Empresa no encontrada")
+    if (body.get("confirm") or "").strip() != "ELIMINAR":
+        raise HTTPException(400, "Escriba la palabra de seguridad ELIMINAR para confirmar")
+    await purge_company(cid)
+    await db.deleted_companies.insert_one({"id": uid(), "company_id": cid, "name": c["name"], "slug": c["slug"], "by": u["email"],
+                                           "reason": "manual", "deleted_at": now_iso()})
+    return {"ok": True}
+
+
+async def purge_expired():
+    for c in await find("companies", {"status": "cancelled", "purge_after": {"$lte": today()}}):
+        await purge_company(c["id"])
+        await db.deleted_companies.insert_one({"id": uid(), "company_id": c["id"], "name": c["name"], "slug": c["slug"], "by": "sistema",
+                                               "reason": "cancelada hace 2 meses", "deleted_at": now_iso()})
+
+
+@r.post("/cron/purge-cancelled")
+async def cron_purge(request: Request):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    auth = request.headers.get("Authorization") or ""
+    if not auth.startswith("Bearer ") or not hmac.compare_digest(auth[7:], os.environ["WEBHOOK_CRON_SECRET"]):
+        raise HTTPException(401, "No autorizado")
+    try:
+        env = await request.json()
+    except Exception:
+        raise HTTPException(400, "Cuerpo inválido")
+    run_id = request.headers.get("X-Webhook-Id") or (env or {}).get("run_id") or uid()
+    if await one("cron_runs", {"run_id": run_id}):
+        return {"ok": True, "duplicate": True}
+    await db.cron_runs.insert_one({"run_id": run_id, "name": "purge-cancelled", "at": now_iso()})
+    asyncio.create_task(purge_expired())
+    return {"ok": True}
 
 
 async def toggle_module(c, key, enabled, user):
@@ -393,7 +480,8 @@ async def register_transfer(body: dict = Body(...), c=Depends(guard(("company_ad
 
 @r.post("/billing/cancel")
 async def cancel_service(c=Depends(guard(("company_admin",)))):
-    await db.companies.update_one({"id": c["cid"]}, {"$set": {"status": "cancelled", "cancelled_at": now_iso()}})
+    await db.companies.update_one({"id": c["cid"]}, {"$set": {"status": "cancelled", "cancelled_at": now_iso(),
+                                                         "purge_after": (datetime.strptime(today(), "%Y-%m-%d") + timedelta(days=60)).strftime("%Y-%m-%d")}})
     await history(c["cid"], c["user"], "Cancelación del servicio")
     return {"ok": True}
 

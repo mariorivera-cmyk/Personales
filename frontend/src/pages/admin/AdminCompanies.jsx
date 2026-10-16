@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Plus, LogIn, Eye } from "lucide-react";
-import { api, errMsg, money, CO_STATUS } from "@/lib/api";
+import { api, errMsg, money } from "@/lib/api";
+import { CompanyStatusPanel, DeleteCompany } from "@/pages/admin/CompanyStatus";
 import { useAuth } from "@/context/Auth";
 import { PageHeader, CompanyBadge, Label } from "@/components/Common";
 import { Button } from "@/components/ui/button";
@@ -21,8 +22,8 @@ function Detail({ id, plans, modules, onClose, reload }) {
   const cur = d.company.currency;
   return (
     <div className="space-y-6 text-sm" data-testid="company-detail">
+      <CompanyStatusPanel company={d.company} onDone={() => { load(); reload(); }} />
       <div className="grid grid-cols-2 gap-3">
-        <div><Label>Estado</Label><select className="field" value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} data-testid="company-status-select">{Object.entries(CO_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
         <div><Label>Plan</Label><select className="field" value={f.plan_id} onChange={(e) => setF({ ...f, plan_id: e.target.value })} data-testid="company-plan-select">{plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
         <div><Label>Ciclo</Label><select className="field" value={f.billing_cycle} onChange={(e) => setF({ ...f, billing_cycle: e.target.value })}><option value="monthly">Mensual</option><option value="annual">Anual</option></select></div>
         <div><Label>Precio preferencial (% desc.)</Label><input type="number" className="field" value={f.coupon_pct || 0} onChange={(e) => setF({ ...f, coupon_pct: Number(e.target.value) })} data-testid="company-discount-input" /></div>
@@ -48,6 +49,7 @@ function Detail({ id, plans, modules, onClose, reload }) {
       <div><h4 className="mb-2 font-semibold">Facturas</h4><InvoiceTable invoices={d.invoices} cur={cur} /></div>
       <div><h4 className="mb-2 font-semibold">Historial de plan y módulos</h4>
         <ul className="space-y-1">{d.history.map((h) => <li key={h.id} className="text-xs"><span className="text-muted-foreground">{h.created_at.slice(0, 16).replace("T", " ")} · {h.user_email}</span> — {h.change}</li>)}</ul></div>
+      <DeleteCompany company={d.company} onDeleted={() => { onClose(); reload(); }} />
     </div>
   );
 }
