@@ -20,7 +20,8 @@ export function AuthProvider({ children }) {
           setCompany(c?.data || null);
         } else setCompany(null);
       } else setCompany(data.company);
-    } catch {
+    } catch (e) {
+      if (e.response?.status === 403) toast.error(e.response.data?.detail || "Acceso bloqueado", { id: "blocked" });
       localStorage.removeItem("token");
       setUser(false);
     }

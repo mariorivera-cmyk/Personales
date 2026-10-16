@@ -1,0 +1,40 @@
+{
+  "summary": "Tested super-admin company status management (active/trial/paused/cancelled), delete with security word ELIMINAR, access blocking, and cron purge. Backend: 8/9 pytest pass. Status transitions, trial_ends=+30d, paused_at, cancelled_at+purge_after=+60d, purge_after removal, 'Estado: X → Y (motivo)' history, 400/404/403 handling, login 403 with clear message, existing token 403 on /api/dashboard, public portal 403, super admin still enters via X-Company-Id, reactivation restores login, delete with wrong/missing word gives 400, ELIMINAR purges every collection by company_id and records deleted_companies, cron 401/200/duplicate, and the purge only removes cancelled companies with past purge_after. UI: status panel (current status disabled with 'Actual'), confirm dialog with cancel/ok, reason saved in history, trial-ends text, 'En pausa' badge, delete dialog only enabled for exact 'ELIMINAR', row removed and sheet closed after delete. Fixed 1 bug: company-purge-date never showed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/cron/purge-cancelled", "issue": "Returns 400 'Cuerpo inválido' when the request has a valid Bearer token and X-Webhook-Id but no JSON body. If the scheduler sends an empty body, the cron never runs. Treat a missing/invalid body as {} instead of raising."},
+      {"endpoint": "POST /api/wa/inbound (routes_wa.handle_inbound line 136)", "issue": "Paused companies are not blocked: the check only covers ('suspended','cancelled'). A paused company that finished setup gets full AI bot replies, which contradicts the UI text 'Portal y WhatsApp detenidos'. Add 'paused' to the check."},
+      {"endpoint": "cron_purge asyncio.create_task", "issue": "No reference is kept to the task, so it can be garbage-collected and errors are swallowed silently. Keep a reference and log exceptions."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "CompanyStatusPanel", "issue": "FIXED by testing agent: company-purge-date never rendered because billing.statement() whitelisted company fields without purge_after. coupon_pct was also missing, so the 'Precio preferencial' input always showed 0.", "selector": "[data-testid='company-purge-date']", "priority": "HIGH (fixed)"}
+    ],
+    "integration_issues": [
+      {"flow": "Existing session of an admin whose company becomes paused/cancelled", "issue": "/api/auth/me still returns 200, so the app loads an empty shell ('Configuremos su salón' with a blank body). The 403 block message is not shown and the user is not logged out. Show the BLOCKED message, e.g. return company status in /auth/me and have the frontend force logout with a toast, or handle 403 in an axios interceptor.", "affected_selectors": ["/app layout"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_company_status_delete.py", "/app/backend/tests/ui_setup_status.py", "/app/test_reports/pytest/pytest_company_status.xml"],
+  "action_items": [
+    "Cron endpoint: do not fail with 400 on an empty body (use body = {} fallback)",
+    "routes_wa.handle_inbound: also block 'paused' companies (currently only suspended/cancelled)",
+    "Handle a paused/cancelled company for already logged-in users: show the block message and log them out instead of an empty dashboard",
+    "Keep a reference to and log errors from the asyncio.create_task(purge_expired())"
+  ],
+  "critical_code_review_comments": [
+    "billing.statement company whitelist was missing purge_after/coupon_pct (fixed). Consider returning the full company minus settings/card secrets.",
+    "set_company_status removes purge_after for paused too (paused from cancelled cancels the purge). This seems reasonable but is undocumented.",
+    "Company-admin self-cancel (/billing/cancel) puts the company in 'cancelled', and ctx then blocks even /billing, so the company cannot reactivate itself. Confirm this is intended.",
+    "wwwpruebacom is 'cancelled' with no purge_after (cancelled at 16:33 today, not by this agent), so the cron will never purge it."
+  ],
+  "updated_files": ["/app/backend/billing.py (statement company whitelist: added coupon_pct, purge_after, cancelled_at, paused_at, status_reason)", "/app/backend/tests/test_company_status_delete.py", "/app/backend/tests/ui_setup_status.py"],
+  "success_rate": {"backend": "89% (8/9)", "frontend": "90%"},
+  "seed_data_creation": "TEST_Co* companies were created and all deleted at the end (verified: only bellavida, salon-retest-trinity and wwwpruebacom remain). TEST_run_* entries remain in cron_runs.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run with -n 0 (no xdist). The module cleanup deletes all TEST_Co* companies, and parallel workers interfere. test_no_body is expected to fail until the cron empty-body fix lands. ui_setup_status.py 'ui' creates test-co-ui, 'wa' checks paused WA inbound.",
+  "rca of the issue": "company-purge-date missing: AdminCompanies Detail loads /admin/companies/{id}/statement, which returns statement()['company'], a hardcoded subset of fields without purge_after. The condition company.status==='cancelled' && company.purge_after was therefore always false. Fixed by adding the fields to the whitelist in billing.py, verified in the UI ('Los datos se borrarán el 2026-12-15')."
+}

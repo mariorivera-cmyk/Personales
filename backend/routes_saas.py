@@ -3,6 +3,7 @@ import os
 import re
 import hmac
 import asyncio
+import logging
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Body, HTTPException, Response, Request
 from core import db, find, one, uid, now_iso, today, insert, clean, audit, hash_pw, check_pw, make_token, get_user, super_admin, guard, ctx
@@ -13,6 +14,7 @@ r = APIRouter(prefix="/api")
 BLOCKED = {"paused": "La cuenta de su empresa está en pausa. Comuníquese con soporte de SalonFlow.",
            "cancelled": "La cuenta de su empresa fue cancelada. Comuníquese con soporte de SalonFlow si desea reactivarla."}
 STATUS_LABEL = {"trial": "Prueba (30 días)", "active": "Activa", "paused": "En pausa", "cancelled": "Cancelada"}
+TASKS = set()
 
 
 @r.post("/auth/login")
@@ -42,6 +44,8 @@ async def login(response: Response, body: dict = Body(...)):
 @r.get("/auth/me")
 async def me(user=Depends(get_user)):
     company = await one("companies", {"id": user.get("company_id")}) if user.get("company_id") else None
+    if company and user["role"] != "super_admin" and company["status"] in BLOCKED:
+        raise HTTPException(403, BLOCKED[company["status"]])
     return {"user": user, "company": company}
 
 
@@ -262,12 +266,14 @@ async def cron_purge(request: Request):
     try:
         env = await request.json()
     except Exception:
-        raise HTTPException(400, "Cuerpo inválido")
-    run_id = request.headers.get("X-Webhook-Id") or (env or {}).get("run_id") or uid()
+        env = {}
+    run_id = request.headers.get("X-Webhook-Id") or (env if isinstance(env, dict) else {}).get("run_id") or uid()
     if await one("cron_runs", {"run_id": run_id}):
         return {"ok": True, "duplicate": True}
     await db.cron_runs.insert_one({"run_id": run_id, "name": "purge-cancelled", "at": now_iso()})
-    asyncio.create_task(purge_expired())
+    task = asyncio.create_task(purge_expired())
+    TASKS.add(task)
+    task.add_done_callback(lambda t: (TASKS.discard(t), t.exception() and logging.error(f"purge error: {t.exception()}")))
     return {"ok": True}
 
 

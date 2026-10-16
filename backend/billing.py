@@ -183,7 +183,8 @@ async def statement(company):
     excess = max(0, used - included)
     cyc = await cycle_items(company)
     return {"company": {k: company.get(k) for k in ("id", "name", "nit", "status", "billing_cycle", "currency", "next_billing_date",
-                                                    "trial_ends", "card", "enabled_modules", "plan_id", "coupon_code", "slug")},
+                                                    "trial_ends", "card", "enabled_modules", "plan_id", "coupon_code", "coupon_pct", "slug",
+                                                    "purge_after", "cancelled_at", "paused_at", "status_reason")},
             "plan": plan, "items": items, "monthly_total": round(sum(i["amount"] for i in items), 2),
             "cycle_total": round(sum(i["amount"] for i in cyc), 2), "invoices": invoices, "payments": payments,
             "charged": charged, "paid": paid, "balance": round(charged - paid, 2),

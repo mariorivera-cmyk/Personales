@@ -59,6 +59,11 @@ Super Administrador, Administrador de Empresa, Gerente de Sucursal, Recepcionist
 - "Guardar y confirmar reglas" permite aceptar las reglas sugeridas. Salones existentes completos se marcaron automáticamente. Probado: iteration_6 y 7.
 - Desbloqueo progresivo (2026-10-16): durante la configuración el menú muestra solo la guía + las páginas de los pasos completados y del paso actual (1 Servicios → 2 Estilistas → 3 Configuración/Sucursales → 4 Reglas); pasos siguientes bloqueados en la guía. Probado: iteration_8.
 
+## Implemented (2026-10-16) — Estados de empresa (Super Admin)
+- Panel de estado en Empresas: Activa, Modo prueba (30 días desde hoy), En pausa (nadie entra; portal y WhatsApp detenidos), Cancelada (nadie entra; datos se borran a los 60 días). Motivo opcional, historial y auditoría. Sesiones abiertas se cierran con mensaje.
+- Eliminar empresa con palabra de seguridad ELIMINAR (borra todas sus colecciones, registro en deleted_companies).
+- Cron de plataforma .emergent/crons.yml `purge-cancelled` diario 3:00 Guatemala → POST /api/cron/purge-cancelled (Bearer WEBHOOK_CRON_SECRET). Probado: iteration_9 + correcciones.
+
 ## Backlog
 - P0: Conectar WhatsApp Cloud API real (token + phone number id por empresa); pasarela Recurrente; FEL con INFILE/Digifact.
 - P1: Cobro de anticipos a clientes finales (sección 7); emails reales (Resend); subdominio por empresa; object storage para archivos.
