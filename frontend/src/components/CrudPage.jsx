@@ -111,10 +111,11 @@ export function FieldInput({ field, value, onChange }) {
     );
   if (field.type === "multi")
     return (
-      <div className="grid max-h-40 grid-cols-2 gap-1 overflow-auto rounded-lg border p-2 text-sm" data-testid={id}>
+      <div className="grid max-h-52 grid-cols-1 gap-1 overflow-auto rounded-lg border p-2 text-sm sm:grid-cols-2" data-testid={id}>
+        {!opts.length && <span className="text-xs text-muted-foreground">Aún no hay opciones registradas</span>}
         {opts.map((o) => (
-          <label key={o.value} className="flex items-center gap-2">
-            <input type="checkbox" checked={(value || []).includes(o.value)}
+          <label key={o.value} className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-secondary">
+            <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" data-testid={`${id}-${o.value}`} checked={(value || []).includes(o.value)}
               onChange={(e) => onChange(e.target.checked ? [...(value || []), o.value] : (value || []).filter((x) => x !== o.value))} />
             {o.label}
           </label>

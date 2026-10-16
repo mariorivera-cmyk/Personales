@@ -186,10 +186,66 @@ async def service_templates(c=Depends(guard(("company_admin",)))):
     return [{"name": n, "category": cat, "duration": d, "price": round(p * f, 2)} for n, cat, d, p in TEMPLATES]
 
 
+async def ensure_category(cid, name):
+    name = (name or "").strip()
+    if name and not await one("service_categories", {"company_id": cid, "name": name}):
+        await insert("service_categories", {"id": uid(), "company_id": cid, "name": name, "created_at": now_iso()})
+
+
+@r.get("/service-categories")
+async def list_categories(c=Depends(guard(None))):
+    for s in await find("services", {"company_id": c["cid"]}):
+        await ensure_category(c["cid"], s.get("category"))
+    cats = await find("service_categories", {"company_id": c["cid"]}, [("name", 1)])
+    for x in cats:
+        x["services"] = await db.services.count_documents({"company_id": c["cid"], "category": x["name"]})
+    return cats
+
+
+@r.post("/service-categories")
+async def create_category(body: dict = Body(...), c=Depends(guard(("company_admin",)))):
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "Escriba el nombre de la categoría")
+    if await one("service_categories", {"company_id": c["cid"], "name": {"$regex": f"^{__import__('re').escape(name)}$", "$options": "i"}}):
+        raise HTTPException(400, "Esa categoría ya existe")
+    await ensure_category(c["cid"], name)
+    await audit(c["user"], c["cid"], "create", "service-categories", name)
+    return await one("service_categories", {"company_id": c["cid"], "name": name})
+
+
+@r.put("/service-categories/{oid}")
+async def rename_category(oid: str, body: dict = Body(...), c=Depends(guard(("company_admin",)))):
+    cat = await one("service_categories", {"id": oid, "company_id": c["cid"]})
+    name = (body.get("name") or "").strip()
+    if not cat or not name:
+        raise HTTPException(400, "Escriba el nombre de la categoría")
+    if name != cat["name"] and await one("service_categories", {"company_id": c["cid"], "name": name}):
+        raise HTTPException(400, "Esa categoría ya existe")
+    await db.service_categories.update_one({"id": oid}, {"$set": {"name": name}})
+    await db.services.update_many({"company_id": c["cid"], "category": cat["name"]}, {"$set": {"category": name}})
+    await audit(c["user"], c["cid"], "update", "service-categories", f"{cat['name']} → {name}")
+    return {"ok": True}
+
+
+@r.delete("/service-categories/{oid}")
+async def delete_category(oid: str, c=Depends(guard(("company_admin",)))):
+    cat = await one("service_categories", {"id": oid, "company_id": c["cid"]})
+    if not cat:
+        raise HTTPException(404, "Categoría no encontrada")
+    n = await db.services.count_documents({"company_id": c["cid"], "category": cat["name"]})
+    if n:
+        raise HTTPException(400, f"No se puede eliminar: {n} servicio(s) usan esta categoría. Cámbielos primero.")
+    await db.service_categories.delete_one({"id": oid})
+    await audit(c["user"], c["cid"], "delete", "service-categories", cat["name"])
+    return {"ok": True}
+
+
 @r.post("/service-templates")
 async def add_templates(body: dict = Body(...), c=Depends(guard(("company_admin",)))):
     items = body.get("items") or []
     for it in items:
+        await ensure_category(c["cid"], it.get("category"))
         await insert("services", {"id": uid(), "company_id": c["cid"], "name": it["name"], "category": it.get("category", ""), "description": "",
                                   "duration": int(it["duration"]), "price": float(it["price"]), "prep_minutes": 0, "cleanup_minutes": 10,
                                   "deposit": 0, "stylist_ids": [], "active": True, "created_at": now_iso()})

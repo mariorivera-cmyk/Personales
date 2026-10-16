@@ -1,6 +1,7 @@
 import { useAuth } from "@/context/Auth";
 import CrudPage from "@/components/CrudPage";
 import { TemplatesButton } from "@/components/Onboarding";
+import { CategoriesButton } from "@/components/Categories";
 import { money, DAYS } from "@/lib/api";
 
 const yes = (v) => (v === false ? "No" : "Sí");
@@ -8,10 +9,10 @@ const yes = (v) => (v === false ? "No" : "Sí");
 export function Services() {
   return (
     <CrudPage title="Servicios" subtitle="Catálogo, duración, precios, anticipos y estilistas autorizados" endpoint="/services" testid="services"
-      extraActions={(reload) => <TemplatesButton onDone={reload} />}
+      extraActions={(reload) => <><CategoriesButton onDone={reload} /><TemplatesButton onDone={reload} /></>}
       defaults={{ duration: 60, price: 0, prep_minutes: 0, cleanup_minutes: 10, deposit: 0, active: true }}
       fields={[
-        { key: "name", label: "Nombre" }, { key: "category", label: "Categoría" }, { key: "description", label: "Descripción", type: "textarea" },
+        { key: "name", label: "Nombre" }, { key: "category", label: "Categoría", type: "select", source: "/service-categories", valueKey: "name", placeholder: "— Seleccione categoría —" }, { key: "description", label: "Descripción", type: "textarea" },
         { key: "duration", label: "Duración (min)", type: "number" }, { key: "price", label: "Precio", type: "number" },
         { key: "deposit", label: "Anticipo fijo (0 = según reglas)", type: "number" }, { key: "cost", label: "Costo (para rentabilidad)", type: "number" },
         { key: "prep_minutes", label: "Preparación (min)", type: "number" }, { key: "cleanup_minutes", label: "Limpieza posterior (min)", type: "number" },
@@ -52,7 +53,8 @@ export function Stylists() {
       defaults={{ active: true, hours: {}, branch_id: user.role === "branch_manager" ? user.branch_id : undefined }}
       fields={[
         { key: "name", label: "Nombre" }, { key: "branch_id", label: "Sucursal", type: "select", source: "/branches" },
-        { key: "specialties", label: "Especialidades", full: true }, { key: "photo", label: "Foto", type: "image" }, { key: "active", label: "Activo", type: "switch" },
+        { key: "service_ids", label: "Servicios que realiza (vacío = todos)", type: "multi", source: "/services" },
+        { key: "specialties", label: "Especialidades (texto libre)", full: true }, { key: "photo", label: "Foto", type: "image" }, { key: "active", label: "Activo", type: "switch" },
         { key: "commission_pct", label: "Comisión (%)", type: "number" }, { key: "commission_fixed", label: "Monto fijo por servicio", type: "number" },
         { key: "base_salary", label: "Sueldo base del periodo", type: "number" }, { key: "tips_in_commission", label: "Propinas entran a comisión", type: "switch" },
         { key: "hours", label: "Horario laboral", type: "hours", optional: true },

@@ -93,9 +93,9 @@ export function TemplatesButton({ onDone }) {
           <div className="max-h-[85vh] w-full max-w-xl overflow-auto rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()} data-testid="templates-dialog">
             <h3 className="mb-3 font-heading text-lg font-bold">Plantillas de servicios (editables)</h3>
             {items.map((x, i) => (
-              <div key={x.name} className="mb-2 grid grid-cols-[auto_1fr_80px_90px] items-center gap-2 text-sm">
-                <input type="checkbox" checked={x.on} onChange={(e) => set(i, "on", e.target.checked)} data-testid={`template-check-${i}`} />
-                <span>{x.name} <span className="text-xs text-muted-foreground">{x.category}</span></span>
+              <div key={x.name} className="mb-2 grid grid-cols-[auto_1fr_80px_90px] items-center gap-3 text-sm">
+                <input type="checkbox" id={`tpl-${i}`} className="h-5 w-5 cursor-pointer accent-[hsl(var(--primary))]" checked={x.on} onChange={(e) => set(i, "on", e.target.checked)} data-testid={`template-check-${i}`} />
+                <label htmlFor={`tpl-${i}`} className="cursor-pointer py-1">{x.name} <span className="text-xs text-muted-foreground">{x.category}</span></label>
                 <input type="number" className="field h-8" value={x.duration} onChange={(e) => set(i, "duration", e.target.value)} title="Minutos" />
                 <input type="number" className="field h-8" value={x.price} onChange={(e) => set(i, "price", e.target.value)} title="Precio" />
               </div>

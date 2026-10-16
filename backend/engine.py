@@ -81,6 +81,7 @@ async def day_slots(cid, branch_id, service_id, date, stylist_id=None, exclude=N
     auth = svc.get("stylist_ids") or []
     if auth:
         stylists = [s for s in stylists if s["id"] in auth]
+    stylists = [s for s in stylists if not s.get("service_ids") or svc["id"] in s["service_ids"]]
     appts = await find("appointments", {"company_id": cid, "date": date, "status": {"$nin": ["cancelled", "no_show"]}})
     appts = [a for a in appts if a["id"] != exclude]
     blocks = await find("blocks", {"company_id": cid, "start_date": {"$lte": date}, "end_date": {"$gte": date}})

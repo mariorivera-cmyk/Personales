@@ -456,7 +456,7 @@ async def public_last_stylist(slug: str, body: dict = Body(...)):
     if not st:
         return None
     svc = await one("services", {"id": body.get("service_id"), "company_id": c["id"]}) if body.get("service_id") else None
-    eligible = not svc or not svc.get("stylist_ids") or st["id"] in svc["stylist_ids"]
+    eligible = not svc or ((not svc.get("stylist_ids") or st["id"] in svc["stylist_ids"]) and (not st.get("service_ids") or svc["id"] in st["service_ids"]))
     return {"stylist_id": st["id"], "stylist_name": st["name"], "branch_id": st["branch_id"], "eligible": eligible}
 
 
