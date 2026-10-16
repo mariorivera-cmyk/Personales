@@ -51,6 +51,7 @@ export default function PublicBooking() {
   const [data, setData] = useState(null);
   const [done, setDone] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [fav, setFav] = useState(null);
   useEffect(() => {
     api.get(`/public/salon/${slug}`).then((r) => { setSalon(r.data); setF((x) => ({ ...x, branch_id: r.data.branches[0]?.id })); }).catch((e) => setError(errMsg(e)));
   }, [slug]);
@@ -58,6 +59,14 @@ export default function PublicBooking() {
     if (!f.service_id || !f.branch_id || !f.date) return;
     api.get(`/public/salon/${slug}/slots`, { params: { branch_id: f.branch_id, service_id: f.service_id, date: f.date, stylist_id: f.pref === "choose" ? f.stylist_id || "" : "" } }).then((r) => setData(r.data));
   }, [slug, f.service_id, f.branch_id, f.date, f.stylist_id, f.pref]);
+  useEffect(() => {
+    const digits = (f.phone || "").replace(/\D/g, "");
+    if (digits.length < 8) { setFav(null); return; }
+    const t = setTimeout(() => {
+      api.post(`/public/salon/${slug}/last-stylist`, { phone: f.phone, service_id: f.service_id }).then((r) => setFav(r.data)).catch(() => setFav(null));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [slug, f.phone, f.service_id]);
   if (error) return <div className="grid min-h-screen place-items-center p-6 text-center" data-testid="portal-error"><div><div className="font-display text-3xl italic">Portal no disponible</div><p className="mt-2 text-muted-foreground">{error}</p></div></div>;
   if (!salon) return null;
   const cur = salon.currency;
@@ -117,6 +126,12 @@ export default function PublicBooking() {
                 <div><Label>Sucursal</Label><select className="field" value={f.branch_id} onChange={(e) => setF({ ...f, branch_id: e.target.value, stylist_id: "", pref: "", time: "" })} data-testid="portal-branch-select">{salon.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
                 <div><Label>Fecha</Label><input type="date" min={todayStr()} className="field" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value, time: "" })} data-testid="portal-date-input" /></div>
               </div>
+              {fav?.eligible && f.stylist_id !== fav.stylist_id && (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 text-sm" data-testid="portal-favorite-banner">
+                  <span>¿Desea agendar nuevamente con <b>{fav.stylist_name}</b>, quien le atendió la última vez?</span>
+                  <Button size="sm" className="rounded-full" onClick={() => setF({ ...f, pref: "choose", branch_id: fav.branch_id, stylist_id: fav.stylist_id, time: "" })} data-testid="portal-favorite-accept">Sí, con {fav.stylist_name.split(" ")[0]}</Button>
+                </div>
+              )}
               <div className="mt-4" data-testid="portal-stylist-choice">
                 <Label>¿Tiene un estilista de preferencia?</Label>
                 <div className="flex flex-wrap gap-2">
@@ -156,6 +171,7 @@ export default function PublicBooking() {
           </div>
           <aside className="h-fit space-y-4 rounded-3xl border bg-white p-6 lg:sticky lg:top-20" data-testid="portal-summary">
             <h2 className="font-heading text-xl font-bold">Sus datos</h2>
+            <p className="text-xs text-muted-foreground">Si ya nos visitó, escriba su teléfono y le sugeriremos a su estilista.</p>
             {[["name", "Nombre completo"], ["phone", "Teléfono WhatsApp"], ["email", "Correo (opcional)"], ["referred_by", "¿Quién le refirió? (teléfono, opcional)"]].map(([k, l]) => (
               <div key={k}><Label>{l}</Label><input className="field" value={f[k] || ""} onChange={(e) => setF({ ...f, [k]: e.target.value })} data-testid={`portal-${k}-input`} /></div>
             ))}

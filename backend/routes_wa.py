@@ -266,6 +266,21 @@ async def public_manage(slug: str, aid: str, body: dict = Body(...)):
         raise HTTPException(409, {"message": e.msg, "alternatives": e.alternatives})
 
 
+@r.post("/public/salon/{slug}/last-stylist")
+async def public_last_stylist(slug: str, body: dict = Body(...)):
+    c = await public_company(slug)
+    last = await db.appointments.find_one({"company_id": c["id"], "client_phone": norm_phone(body.get("phone")), "status": "completed"},
+                                          {"_id": 0}, sort=[("date", -1), ("time", -1)])
+    if not last:
+        return None
+    st = await one("stylists", {"id": last["stylist_id"], "company_id": c["id"], "active": {"$ne": False}})
+    if not st:
+        return None
+    svc = await one("services", {"id": body.get("service_id"), "company_id": c["id"]}) if body.get("service_id") else None
+    eligible = not svc or not svc.get("stylist_ids") or st["id"] in svc["stylist_ids"]
+    return {"stylist_id": st["id"], "stylist_name": st["name"], "branch_id": st["branch_id"], "eligible": eligible}
+
+
 @r.post("/public/salon/{slug}/waitlist")
 async def public_waitlist(slug: str, body: dict = Body(...)):
     c = await public_company(slug)
