@@ -115,7 +115,10 @@ export function TemplatesButton({ onDone }) {
                 <input type="number" className="field h-8" value={x.price} onChange={(e) => set(i, "price", e.target.value)} title="Precio" />
               </div>
             ))}
-            <Button className="mt-3 w-full" onClick={save} disabled={!items.some((x) => x.on)} data-testid="templates-save">Agregar seleccionados</Button>
+            <div className="mt-3 flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setOpen(false)} data-testid="templates-cancel">Cancelar</Button>
+              <Button className="flex-1" onClick={save} disabled={!items.some((x) => x.on)} data-testid="templates-save">Agregar seleccionados</Button>
+            </div>
           </div>
         </div>, document.body
       )}
