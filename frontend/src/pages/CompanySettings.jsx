@@ -12,6 +12,13 @@ import { SalonRules } from "@/components/SalonRules";
 function General() {
   const { company, refresh, checkSetup } = useAuth();
   const [f, setF] = useState(company);
+  const [qp] = useSearchParams();
+  const focusDesc = qp.get("focus") === "description";
+  useEffect(() => {
+    if (!focusDesc) return;
+    const t = setTimeout(() => { const el = document.querySelector("[data-testid=settings-description]"); el?.scrollIntoView({ behavior: "smooth", block: "center" }); el?.focus(); }, 300);
+    return () => clearTimeout(t);
+  }, [focusDesc]);
   const s = f.settings || {};
   const setS = (k, v) => setF({ ...f, settings: { ...s, [k]: v } });
   const save = async () => {
@@ -42,7 +49,7 @@ function General() {
       </Panel>
       <Panel title="Portal público" testid="settings-portal">
         <div className="space-y-3">
-          <div><Label>Descripción del salón</Label><textarea className="field h-20 py-2" value={f.description || ""} onChange={(e) => setF({ ...f, description: e.target.value })} data-testid="settings-description" /></div>
+          <div className={focusDesc && !f.description ? "rounded-lg ring-2 ring-amber-400 ring-offset-4" : ""}><Label>Descripción del salón</Label>{focusDesc && !f.description && <p className="mb-1 text-xs font-semibold text-amber-800" data-testid="description-missing">Falta la descripción del salón: escríbala aquí y pulse Guardar.</p>}<textarea className="field h-20 py-2" value={f.description || ""} onChange={(e) => setF({ ...f, description: e.target.value })} data-testid="settings-description" /></div>
           <div><Label>Logo</Label><FieldInput field={{ key: "logo_url", type: "image" }} value={f.logo_url} onChange={(v) => setF({ ...f, logo_url: v })} /></div>
           {[0, 1, 2].map((i) => <div key={i}><Label>Foto {i + 1}{i === 0 ? " (portada)" : ""}</Label><FieldInput field={{ key: `photo_${i}`, type: "image" }} value={photos[i]} onChange={(v) => { const p = [...photos]; p[i] = v; setF({ ...f, photo_urls: p.filter(Boolean) }); }} /></div>)}
           <div className="grid grid-cols-3 gap-2">{["instagram", "facebook", "tiktok"].map((k) => <div key={k}><Label>{k}</Label><input className="field" placeholder="https://..." value={social[k] || ""} onChange={(e) => setF({ ...f, social: { ...social, [k]: e.target.value } })} data-testid={`settings-${k}`} /></div>)}</div>

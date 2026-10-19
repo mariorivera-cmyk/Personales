@@ -5,12 +5,15 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianG
 import { api, money, errMsg } from "@/lib/api";
 import { PageHeader, Kpi, Panel, StatusBadge, EmptyState, Loader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
-import { Onboarding, Alerts } from "@/components/Onboarding";
+import { Onboarding, Alerts, PendingSteps } from "@/components/Onboarding";
 import { useAuth } from "@/context/Auth";
 
 export default function Dashboard() {
-  const { company } = useAuth();
-  if (company && !company.setup_complete) return <SetupHome />;
+  const { company, setup } = useAuth();
+  if (company && !company.setup_complete && !setup?.setup_complete) {
+    if (!setup) return null;
+    if (!setup.skipped) return <SetupHome />;
+  }
   return <Main />;
 }
 
@@ -36,6 +39,7 @@ function Main() {
     <div data-testid="dashboard-page">
       <PageHeader title="Dashboard gerencial" subtitle="Indicadores en tiempo real de operación, comercial y marketing"
         action={<Button variant="outline" onClick={runReminders} data-testid="run-reminders-btn"><Bell className="mr-1 h-4 w-4" />Enviar recordatorios</Button>} />
+      <PendingSteps />
       <Onboarding />
       <Alerts />
       <h4 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">Operación</h4>

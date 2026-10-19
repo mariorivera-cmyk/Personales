@@ -84,6 +84,8 @@ export function MyAccount({ slug, onRepeat }) {
   const [acc, setAcc] = useState(null);
   const [res, setRes] = useState({});
   const [cancel, setCancel] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const openCancel = (a) => api.get(`/public/salon/${slug}/appointments/${a.id}/cancel-preview`, hdr()).then((r) => { setPreview(r.data); setCancel(a); }).catch((e) => toast.error(errMsg(e)));
   const tok = () => { const t = JSON.parse(sessionStorage.getItem(key) || "null"); return t && t.exp > Date.now() ? t.token : null; };
   const hdr = () => ({ headers: { "X-Client-Token": tok() } });
   const load = () => api.get(`/public/salon/${slug}/account`, hdr()).then((r) => setAcc(r.data)).catch(() => { sessionStorage.removeItem(key); setAcc(null); });
@@ -119,7 +121,7 @@ export function MyAccount({ slug, onRepeat }) {
                 <input type="time" step="1800" className="field h-8 w-28" onChange={(e) => setRes({ ...res, [a.id]: { ...res[a.id], time: e.target.value } })} />
                 <Button size="sm" variant="outline" onClick={() => manage(a, "reschedule")} data-testid={`my-resched-${a.id}`}>Reprogramar</Button>
                 <Button size="sm" variant="outline" onClick={() => manage(a, "confirm")}>Confirmar</Button>
-                <Button size="sm" variant="destructive" onClick={() => setCancel(a)} data-testid={`my-cancel-${a.id}`}>Cancelar</Button>
+                <Button size="sm" variant="destructive" onClick={() => openCancel(a)} data-testid={`my-cancel-${a.id}`}>Cancelar</Button>
               </div>
             </div>
           ))}
@@ -129,7 +131,7 @@ export function MyAccount({ slug, onRepeat }) {
           ))}
         </div>
       )}
-      <CancelDialog open={!!cancel} onClose={() => setCancel(null)} onConfirm={(reason) => manage(cancel, "cancel", { reason })} />
+      <CancelDialog open={!!cancel} client preview={preview} onClose={() => setCancel(null)} onConfirm={(reason) => manage(cancel, "cancel", { reason })} />
     </section>
   );
 }

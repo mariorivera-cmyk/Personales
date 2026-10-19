@@ -1,4 +1,5 @@
 import { useAuth } from "@/context/Auth";
+import { useSearchParams } from "react-router-dom";
 import CrudPage from "@/components/CrudPage";
 import { TemplatesButton } from "@/components/Onboarding";
 import { CategoriesButton } from "@/components/Categories";
@@ -32,7 +33,11 @@ export function Services() {
 }
 
 export function Branches() {
-  return (
+  const [qp] = useSearchParams();
+  const { setup } = useAuth();
+  const miss = qp.get("focus") === "address" && setup?.pending?.find((p) => p.key === "address");
+  return (<>
+    {miss && <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-900" data-testid="address-missing">{miss.hint} Pulse el lápiz de la sucursal y complete el campo «Dirección».</div>}
     <CrudPage title="Sucursales" subtitle="Horarios de operación y capacidad operativa" endpoint="/branches" testid="branches"
       defaults={{ capacity: 4, hours: { 0: ["09:00", "19:00"], 1: ["09:00", "19:00"], 2: ["09:00", "19:00"], 3: ["09:00", "19:00"], 4: ["09:00", "19:00"], 5: ["09:00", "17:00"] } }}
       fields={[
@@ -40,10 +45,10 @@ export function Branches() {
         { key: "capacity", label: "Capacidad simultánea (citas)", type: "number" }, { key: "hours", label: "Horario de operación", type: "hours" },
       ]}
       columns={[
-        { key: "name", label: "Sucursal" }, { key: "address", label: "Dirección" }, { key: "capacity", label: "Capacidad" },
+        { key: "name", label: "Sucursal" }, { key: "address", label: "Dirección", render: (r) => r.address || <span className="font-semibold text-amber-700">Falta dirección</span> }, { key: "capacity", label: "Capacidad" },
         { key: "hours", label: "Días abiertos", render: (r) => Object.keys(r.hours || {}).map((d) => DAYS[d]).join(", ") },
       ]} />
-  );
+  </>);
 }
 
 export function Stylists() {

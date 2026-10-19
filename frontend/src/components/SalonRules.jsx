@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { RotateCcw, Lock } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
@@ -70,6 +71,19 @@ export function SalonRules() {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const { checkSetup } = useAuth();
+  const [qp] = useSearchParams();
+  const focus = qp.get("focus");
+  useEffect(() => {
+    if (!data || !focus) return;
+    const t = setTimeout(() => {
+      const el = document.querySelector(`[data-testid=rule-row-${focus}]`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("rounded-lg", "bg-amber-50", "ring-2", "ring-amber-400", "px-2");
+      el.querySelector("input,select,textarea")?.focus();
+    }, 300);
+    return () => clearTimeout(t);
+  }, [data, focus]);
   const load = (s = scope) => api.get("/salon-rules", { params: { branch_id: s } }).then((r) => {
     setData(r.data); setVals(r.data.effective);
     setOwn(Object.fromEntries(r.data.schema.map((d) => [d.key, !s || d.key in r.data.branch])));

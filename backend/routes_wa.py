@@ -428,6 +428,16 @@ async def review_post(slug: str, token: str, body: dict = Body(...)):
     return {"ok": True}
 
 
+@r.get("/public/salon/{slug}/appointments/{aid}/cancel-preview")
+async def public_cancel_preview(slug: str, aid: str, request: Request):
+    c = await public_company(slug)
+    phone = client_from_token(request, c["id"])
+    a = await one("appointments", {"id": aid, "company_id": c["id"], "client_phone": phone})
+    if not a:
+        raise HTTPException(404, "Cita no encontrada")
+    return E.cancel_preview(a, await E.appt_rules(a, c))
+
+
 @r.post("/public/salon/{slug}/appointments/{aid}")
 async def public_manage(slug: str, aid: str, request: Request, body: dict = Body(...)):
     c = await public_company(slug)

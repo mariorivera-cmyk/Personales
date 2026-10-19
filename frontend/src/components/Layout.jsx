@@ -32,8 +32,8 @@ const COMPANY_NAV = [
   { to: "/app/config", label: "Configuración", icon: Settings, roles: A },
   { to: "/app/facturacion", label: "Mi suscripción", icon: CreditCard, roles: A },
 ];
-const STEP_PATHS = { services: ["/app/servicios"], stylists: ["/app/estilistas"], salon: ["/app/config", "/app/sucursales"], rules: ["/app/config"] };
-const STEP_ORDER = ["services", "stylists", "salon", "rules"];
+const STEP_PATHS = { services: ["/app/servicios"], stylists: ["/app/estilistas"], description: ["/app/config"], address: ["/app/sucursales"], rules: ["/app/config"], bank: ["/app/config"] };
+const STEP_ORDER = ["services", "stylists", "description", "address", "rules", "bank"];
 const setupPaths = (current) => ["/app", ...STEP_ORDER.slice(0, STEP_ORDER.indexOf(current) + 1).flatMap((k) => STEP_PATHS[k])];
 const ADMIN_NAV = [
   { to: "/admin", label: "Resumen SaaS", icon: Shield, end: true },
@@ -59,7 +59,8 @@ export default function Layout() {
   if (user === null) return <div className="grid h-screen place-items-center text-muted-foreground">Cargando...</div>;
   if (!user) return <Navigate to="/login" replace />;
   const isSA = user.role === "super_admin";
-  const setup = !!company && !company.setup_complete && !isSA && !setupInfo?.setup_complete;
+  const pendingSkip = !!company && !company.setup_complete && !isSA && setupInfo?.skipped && !setupInfo?.setup_complete;
+  const setup = !!company && !company.setup_complete && !isSA && !setupInfo?.setup_complete && !setupInfo?.skipped;
   const SETUP_PATHS = setupPaths(setupInfo?.current);
   if (setup && setupInfo && loc.pathname.startsWith("/app") && !SETUP_PATHS.includes(loc.pathname)) return <Navigate to="/app" replace />;
   const items = COMPANY_NAV.filter((n) => (isSA || n.roles.includes(user.role)) && (!n.mod || (company?.enabled_modules || []).includes(n.mod)) && (!setup || SETUP_PATHS.includes(n.to)));
@@ -79,6 +80,7 @@ export default function Layout() {
           <div className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-widest text-slate-500">{company.name}</div>
           {items.map((n) => <Item key={n.to} n={n} onClick={() => setOpen(false)} />)}
           {setup && <p className="mx-3 mt-4 rounded-lg bg-white/5 p-3 text-xs leading-relaxed text-slate-400" data-testid="setup-nav-note">Cada opción aparece al completar el paso anterior de la guía de arranque.</p>}
+          {pendingSkip && <NavLink to="/app" onClick={() => setOpen(false)} className="mx-3 mt-4 flex items-center gap-2 rounded-lg bg-amber-400/15 p-3 text-xs font-semibold text-amber-200 hover:bg-amber-400/25" data-testid="setup-pending-indicator">Faltan {setupInfo.pending.length} paso{setupInfo.pending.length === 1 ? "" : "s"} para dejar su salón listo →</NavLink>}
         </>}
       </nav>
       <div className="border-t border-white/10 pt-3">

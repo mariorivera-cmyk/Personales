@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 import { CheckCircle2, Circle, X, AlertTriangle, Bell, Lock } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, errMsg } from "@/lib/api";
 import { useAuth } from "@/context/Auth";
 import { Panel, StatusBadge } from "@/components/Common";
 import { Button } from "@/components/ui/button";
@@ -21,14 +21,17 @@ export function Onboarding() {
   const done = d.steps.filter((s) => s.done).length;
   const req = d.steps.filter((s) => d.required.includes(s.key));
   const share = async () => {
+    if (!d.setup_complete) return toast.error(`Antes de compartir complete: ${d.pending.map((p) => p.label).join(", ")}`);
     await navigator.clipboard?.writeText(d.portal_url).catch(() => {});
     await api.post("/onboarding", { shared: true });
     toast.success("Enlace copiado");
     load();
   };
+  const skip = async () => { try { await api.post("/onboarding", { skipped: true }); toast.success("Guía omitida: le recordaremos los pasos pendientes"); await checkSetup(); } catch (e) { toast.error(errMsg(e)); } };
   return (
     <Panel title={`Guía de arranque · ${done}/${d.steps.length}`} className="mb-8" testid="onboarding-panel"
-      action={d.setup_complete && <button onClick={async () => { await api.post("/onboarding", { dismissed: true }); load(); }} className="text-muted-foreground" data-testid="onboarding-dismiss"><X className="h-4 w-4" /></button>}>
+      action={d.setup_complete ? <button onClick={async () => { await api.post("/onboarding", { dismissed: true }); load(); }} className="text-muted-foreground" data-testid="onboarding-dismiss"><X className="h-4 w-4" /></button>
+        : <Button variant="outline" size="sm" onClick={skip} data-testid="onboarding-skip">Omitir por ahora</Button>}>
       {!d.setup_complete && <p className="mb-3 text-sm text-muted-foreground" data-testid="onboarding-setup-msg">Paso {req.findIndex((s) => s.key === d.current) + 1} de {req.length}: complete cada paso en orden; al terminarlo aparece el siguiente en el menú. Al finalizar se activan la agenda, el portal de reservas y el resto del sistema.</p>}
       <div className="mb-4 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${(done / d.steps.length) * 100}%` }} /></div>
       <div className="grid gap-6 md:grid-cols-[1fr_auto]">
@@ -37,12 +40,15 @@ export function Onboarding() {
             const locked = !d.setup_complete && !s.done && s.key !== d.current;
             const isCur = s.key === d.current;
             return (
-            <li key={s.key} className={`flex items-center gap-2 rounded-lg text-sm ${isCur ? "bg-primary/5 px-2 py-1.5 font-semibold" : ""}`} data-testid={`onboarding-step-${s.key}`}>
+            <li key={s.key} className={`rounded-lg text-sm ${isCur ? "bg-primary/5 px-2 py-1.5" : ""}`} data-testid={`onboarding-step-${s.key}`}>
+              <div className={`flex items-center gap-2 ${isCur ? "font-semibold" : ""}`}>
               {s.done ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : locked ? <Lock className="h-4 w-4 text-slate-300" /> : <Circle className="h-4 w-4 text-primary" />}
               <span className="w-4 text-xs text-muted-foreground">{i + 1}.</span>
               {locked ? <span className="text-muted-foreground" data-testid={`onboarding-locked-${s.key}`}>{s.label}</span>
                 : s.to ? <Link to={s.to} className={s.done ? "text-muted-foreground line-through" : "text-primary hover:underline"} data-testid={`onboarding-link-${s.key}`}>{s.label}{isCur && " →"}</Link>
                 : <button onClick={share} className={s.done ? "text-muted-foreground line-through" : "text-primary underline"} data-testid="onboarding-share">{s.label}</button>}
+              </div>
+              {!s.done && !d.setup_complete && <p className="ml-10 text-xs text-muted-foreground" data-testid={`onboarding-hint-${s.key}`}>{s.hint}</p>}
             </li>
             );
           })}
@@ -55,6 +61,34 @@ export function Onboarding() {
         ) : null}
       </div>
     </Panel>
+  );
+}
+
+export function PendingSteps() {
+  const { setup, checkSetup } = useAuth();
+  const [min, setMin] = useState(sessionStorage.getItem("pending_min") === "1");
+  if (!setup?.pending?.length) return null;
+  const toggle = () => { sessionStorage.setItem("pending_min", min ? "0" : "1"); setMin(!min); };
+  const resume = async () => { try { await api.post("/onboarding", { skipped: false }); await checkSetup(); } catch (e) { toast.error(errMsg(e)); } };
+  return (
+    <div className="mb-8 rounded-2xl border border-amber-300 bg-amber-50 p-5" data-testid="pending-steps">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-heading text-lg font-semibold text-amber-950">Pasos mínimos pendientes para dejar su salón listo ({setup.pending.length})</h3>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={resume} data-testid="pending-resume-guide">Retomar guía</Button>
+          <Button size="sm" variant="ghost" onClick={toggle} data-testid="pending-minimize">{min ? "Mostrar" : "Minimizar"}</Button>
+        </div>
+      </div>
+      {!min && <>
+        <p className="mt-1 text-sm text-amber-900" data-testid="pending-portal-note">Su portal de reservas y el asistente de WhatsApp están en pausa («Este salón aún está preparando su portal») hasta completar estos pasos.</p>
+        <ul className="mt-3 space-y-2">{setup.pending.map((s) => (
+          <li key={s.key} className="flex flex-wrap items-center gap-2 text-sm" data-testid={`pending-step-${s.key}`}>
+            <Circle className="h-4 w-4 text-amber-700" /><Link to={s.to} className="font-semibold text-amber-950 underline" data-testid={`pending-link-${s.key}`}>{s.label}</Link>
+            <span className="text-xs text-amber-800">{s.hint}</span>
+          </li>
+        ))}</ul>
+      </>}
+    </div>
   );
 }
 

@@ -258,40 +258,65 @@ async def add_templates(body: dict = Body(...), c=Depends(guard(("company_admin"
     return {"created": len(items)}
 
 
-REQUIRED_STEPS = ("services", "stylists", "salon", "rules")
 
 
 async def setup_steps(co):
     cid = co["id"]
     branches = await find("branches", {"company_id": cid})
+    bmap = {b["id"]: b for b in branches}
     ob = co.get("onboarding") or {}
+    svcs = [s for s in await find("services", {"company_id": cid}) if s.get("active", True) is not False
+            and float(s.get("duration") or 0) > 0 and s.get("price") not in (None, "")]
+    sts = [s for s in await find("stylists", {"company_id": cid}) if s.get("active", True) is not False and s.get("branch_id") in bmap
+           and (s.get("hours") or bmap[s["branch_id"]].get("hours"))]
+    no_addr = [b["name"] for b in branches if not (b.get("address") or "").strip()]
+    ru = R.effective(co)
+    bank_ok = bool(ru["bank_name"].strip()) and bool(ru["bank_account"].strip())
     steps = [
-        {"key": "services", "label": "Agregue sus servicios", "to": "/app/servicios", "done": await db.services.count_documents({"company_id": cid}) > 0},
-        {"key": "stylists", "label": "Registre estilistas y horarios", "to": "/app/estilistas", "done": await db.stylists.count_documents({"company_id": cid}) > 0},
-        {"key": "salon", "label": "Complete datos del salón (descripción y dirección)", "to": "/app/config",
-         "done": bool(co.get("description")) and bool(branches) and all(b.get("address") for b in branches)},
-        {"key": "rules", "label": "Revise las reglas del salón (cancelación, anticipo, faltas)", "to": "/app/config?tab=reglas", "done": bool(co.get("rules_reviewed"))},
-        {"key": "share", "label": "Comparta su enlace de reservas", "to": None, "done": bool(ob.get("shared"))},
+        {"key": "services", "label": "Servicios", "to": "/app/servicios", "done": bool(svcs),
+         "hint": "Agregue al menos 1 servicio activo con duración y precio."},
+        {"key": "stylists", "label": "Estilistas", "to": "/app/estilistas", "done": bool(sts),
+         "hint": "Registre al menos 1 estilista activa con sucursal y horario."},
+        {"key": "description", "label": "Descripción del salón", "to": "/app/config?focus=description", "done": bool((co.get("description") or "").strip()),
+         "hint": "Falta la descripción del salón (Configuración › General › Descripción del salón)."},
+        {"key": "address", "label": "Dirección de la sucursal", "to": "/app/sucursales?focus=address", "done": bool(branches) and not no_addr,
+         "hint": f"Falta la dirección de: {', '.join(no_addr)}." if no_addr else "Registre una sucursal con dirección."},
+        {"key": "rules", "label": "Reglas del salón", "to": "/app/config?tab=reglas", "done": bool(co.get("rules_reviewed")),
+         "hint": "Revise y guarde las reglas de cancelación, anticipo y faltas al menos una vez."},
     ]
-    complete = bool(co.get("setup_complete")) or all(s["done"] for s in steps if s["key"] in REQUIRED_STEPS)
+    if ru["deposit_enabled"]:
+        steps.append({"key": "bank", "label": "Datos bancarios del anticipo", "to": "/app/config?tab=reglas&focus=bank_name", "done": bank_ok,
+                      "hint": "El anticipo está activado: escriba banco y número de cuenta (o desactive el anticipo)."})
+    required = [s["key"] for s in steps]
+    ready = all(s["done"] for s in steps)
+    steps.append({"key": "share", "label": "Compartir enlace del portal", "to": None, "done": bool(ob.get("shared")),
+                  "hint": "Se habilita al completar los pasos anteriores."})
+    complete = bool(co.get("setup_complete")) or ready
     if complete and not co.get("setup_complete"):
         await db.companies.update_one({"id": cid}, {"$set": {"setup_complete": True}})
-    return steps, complete
+    return steps, complete, required
 
 
 @r.get("/onboarding")
 async def onboarding(c=Depends(guard(STAFF))):
     co = c["company"]
-    steps, complete = await setup_steps(co)
+    steps, complete, required = await setup_steps(co)
     ob = co.get("onboarding") or {}
-    return {"steps": steps, "required": list(REQUIRED_STEPS), "setup_complete": complete,
-            "current": None if complete else next(s["key"] for s in steps if s["key"] in REQUIRED_STEPS and not s["done"]),
+    pending = [s for s in steps if s["key"] in required and not s["done"]]
+    return {"steps": steps, "required": required, "setup_complete": complete, "pending": pending,
+            "current": pending[0]["key"] if pending and not complete else None, "skipped": bool(ob.get("skipped")),
             "dismissed": bool(ob.get("dismissed")) and complete, "portal_url": portal_url(co["slug"])}
 
 
 @r.post("/onboarding")
 async def onboarding_update(body: dict = Body(...), c=Depends(guard(STAFF))):
-    upd = {f"onboarding.{k}": bool(v) for k, v in body.items() if k in ("shared", "dismissed")}
+    upd = {f"onboarding.{k}": bool(v) for k, v in body.items() if k in ("shared", "dismissed", "skipped")}
+    if "shared" in body and body["shared"] and not c["company"].get("setup_complete"):
+        raise HTTPException(400, "Complete los pasos mínimos antes de compartir el enlace del portal")
+    if "skipped" in body:
+        if c["user"]["role"] not in ("company_admin", "super_admin"):
+            raise HTTPException(403, "Solo el administrador puede omitir o retomar la guía")
+        await audit(c["user"], c["cid"], "onboarding", "guia", "Guía de arranque omitida" if body["skipped"] else "Guía de arranque retomada")
     await db.companies.update_one({"id": c["cid"]}, {"$set": upd})
     return {"ok": True}
 

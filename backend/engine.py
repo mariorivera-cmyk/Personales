@@ -304,8 +304,13 @@ def cancel_preview(a, ru, apply=True):
     pct = 0 if ru["deposit_refund"] == "none" else (100 if not late else float(ru["deposit_refund_pct"]) if ru["deposit_refund"] == "partial" else 0)
     acts = {"record": "Se registra como cancelación tardía.", "notify": "Se registra y se avisa a la clienta por WhatsApp.",
             "deposit": "Se registra, se avisa a la clienta y su próxima reserva pedirá anticipo."}
+    cl_acts = {"record": "Quedará registrada como cancelación tardía.", "notify": "Quedará registrada como cancelación tardía.",
+               "deposit": "Quedará registrada como cancelación tardía y su próxima reserva requerirá anticipo."}
+    pr = R.public_rules(ru)
     return {"late": bool(late), "hours_before": round(hrs, 1), "cancel_hours": ru["cancel_hours"], "cancel_enabled": ru["cancel_enabled"],
             "consequence": acts[ru["late_cancel_action"]] if late else "Cancelación dentro del plazo: sin penalización.",
+            "client_consequence": cl_acts[ru["late_cancel_action"]] if late else "Está dentro del plazo: puede cancelar sin penalización.",
+            "policy_text": pr["policy_text"], "refund_text": pr["refund_text"],
             "deposit_paid": paid, "refund": round(paid * pct / 100, 2) if paid else 0}
 
 

@@ -65,8 +65,16 @@ export function CheckoutDialog({ appt, onClose, onDone }) {
   );
 }
 
-function CancelPolicyInfo({ p, apply, setApply }) {
+function CancelPolicyInfo({ p, apply, setApply, client }) {
   const late = p.cancel_enabled && p.hours_before < p.cancel_hours;
+  if (client) return (
+    <div className={`space-y-1.5 rounded-lg p-3 text-sm ${late ? "bg-amber-50 text-amber-900" : "bg-secondary/60"}`} data-testid="cancel-policy-info">
+      {late && <div className="font-semibold" data-testid="cancel-late-flag">Cancelación tardía: faltan {Math.max(0, p.hours_before)} h y el salón pide cancelar con {p.cancel_hours} h de anticipación.</div>}
+      <div data-testid="cancel-client-consequence">{p.client_consequence}</div>
+      {p.deposit_paid > 0 && <div className="text-xs font-medium" data-testid="cancel-refund-info">Anticipo pagado Q{p.deposit_paid.toFixed(2)} · {p.refund >= p.deposit_paid ? "se le reembolsa completo" : p.refund > 0 ? `se le reembolsan Q${p.refund.toFixed(2)}` : "no se reembolsa"}.</div>}
+      {p.policy_text && <div className="text-xs text-muted-foreground" data-testid="cancel-policy-text">{p.policy_text} {p.refund_text}</div>}
+    </div>
+  );
   return (
     <div className={`space-y-1.5 rounded-lg p-3 text-sm ${late && apply ? "bg-amber-50 text-amber-900" : "bg-secondary/60"}`} data-testid="cancel-policy-info">
       {late ? <>
@@ -80,7 +88,7 @@ function CancelPolicyInfo({ p, apply, setApply }) {
   );
 }
 
-export function CancelDialog({ open, onClose, onConfirm, title = "¿Cancelar esta cita?", preview }) {
+export function CancelDialog({ open, onClose, onConfirm, title = "¿Cancelar esta cita?", preview, client }) {
   const [reason, setReason] = useState("");
   const [apply, setApply] = useState(true);
   return (
@@ -88,7 +96,7 @@ export function CancelDialog({ open, onClose, onConfirm, title = "¿Cancelar est
       <DialogContent className="max-w-sm" data-testid="cancel-dialog">
         <DialogHeader><DialogTitle className="font-heading">{title}</DialogTitle></DialogHeader>
         <p className="text-sm text-muted-foreground">El horario quedará libre y se avisará a la lista de espera.</p>
-        {preview && <CancelPolicyInfo p={preview} apply={apply} setApply={setApply} />}
+        {preview && <CancelPolicyInfo p={preview} apply={apply} setApply={setApply} client={client} />}
         <div><Label>Motivo (opcional)</Label><input className="field" value={reason} onChange={(e) => setReason(e.target.value)} data-testid="cancel-reason-input" /></div>
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose} data-testid="cancel-dialog-back">Volver</Button>
