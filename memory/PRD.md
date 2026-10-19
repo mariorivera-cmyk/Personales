@@ -77,6 +77,9 @@ Super Administrador, Administrador de Empresa, Gerente de Sucursal, Recepcionist
 - N2: descripción y dirección separadas, con texto de qué falta y enlace al campo exacto resaltado (?focus=description / address / bank_name).
 - N3: cancelar desde "Mis citas" muestra la política del salón, aviso de cancelación tardía y reembolso del anticipo. Probado: iteration_12 y 13.
 
+## Implemented (2026-10-19) — Calendario para reprogramar en Mis citas
+- Diálogo con calendario en español (respeta anticipación mín/máx, festivos y días cerrados de la sucursal), horarios libres de la misma estilista, alternativa con otras estilistas agrupadas y próximos días con espacio. Muestra la regla de reprogramación y bloquea si ya no se permite. Probado: iteration_14 y 15.
+
 ## Backlog
 - P0: Conectar WhatsApp Cloud API real (token + phone number id por empresa); pasarela Recurrente; FEL con INFILE/Digifact.
 - P1: Cobro de anticipos a clientes finales (sección 7); emails reales (Resend); subdominio por empresa; object storage para archivos.

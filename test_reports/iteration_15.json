@@ -1,0 +1,27 @@
+{
+  "summary": "Iteration 15 retest of the iteration_14 reschedule fixes on the bellavida portal. Backend: 17/17 pytest pass (6 new iter15 tests plus 11 iter14 regression tests). New tests: open_weekdays is [0..5] for Zona 10 (Mon=0, Sunday closed); allowed=false for cancelled and completed appointments and true for confirmed; each stylist_id in others maps to one stylist_name; reschedule persists. Frontend, checked with Playwright on desktop 1920 and mobile 390: Sunday Oct 25 is disabled and Sat 24 / Mon 26 are enabled. Carla blocked on Oct 29 -> resched-others has two groups, resched-others-<DiegoId> and resched-others-<LuciaId>, with name headers 'Diego Ruiz' and 'Lucía Pérez' (19 slots each). All stylists blocked on Oct 31 -> resched-no-slots shows next buttons 2026-11-02/03/04. Clicking resched-next-2026-11-02 moves the calendar to 'noviembre 2026' and selects day 2. From the November view, clicking the outside day Oct 30 moves back to 'octubre 2026' and selects day 30. Confirming shows the label 'Confirmar 2026-11-02 09:00' and the toast 'Cita reprogramada para el 2026-11-02 a las 09:00'; the dialog closes and the card updates to 2026-11-02 09:00. An appointment at the max reschedule count shows resched-not-allowed, with no resched-confirm button and no calendar. my-confirm-<id> testid is present. Mobile: dialog is 390px wide and scrollWidth is 390.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "RescheduleDialog", "issues": ["Minor UX: the dialog always opens on the current month with no day highlighted, even when the existing appointment is in another month (e.g. appt 2026-11-02 opens on octubre). Could set the initial month to the appointment's month or show it highlighted."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter15_resched_fixes.py",
+    "/app/backend/tests/test_iter14_resched_calendar.py",
+    "/app/backend/tests/ui_iter15_resched_seed.py",
+    "/app/test_reports/pytest/pytest_iter15.xml"
+  ],
+  "action_items": ["Optional: open the calendar on the month of the current appointment"],
+  "critical_code_review_comments": [
+    "routes_wa.public_resched_slots: open_weekdays comes from branch hours keys only. Stylist-specific hours are not considered, so a day can be enabled but have no slots for the own stylist. Acceptable because others/next_days cover it."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter15_resched_fixes.py", "/app/backend/tests/ui_iter15_resched_seed.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "TEST_Resched appointments/clients (+5025501550x) and TEST_resched_block15 blocks on bellavida were created and then removed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: python -m pytest -c /dev/null backend/tests/test_iter15_resched_fixes.py backend/tests/test_iter14_resched_calendar.py (self-cleaning). For UI: python3 backend/tests/ui_iter15_resched_seed.py (blocks all Zona10 stylists on 2026-10-31 and Carla on 2026-10-29) prints ids and a token. Set sessionStorage ctok_bellavida={token,exp}. The calendar caption selector is [aria-live=polite] inside resched-dialog, and day buttons are button[name=day] (rdp v8). Clean with the TEST_Resched / TEST_resched regexes on appointments, clients and blocks."
+}

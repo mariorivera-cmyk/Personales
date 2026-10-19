@@ -24,7 +24,7 @@ function SlotButtons({ slots, pick, setPick, testid }) {
 export function RescheduleDialog({ slug, appt, hdr, onClose, onDone }) {
   const [info, setInfo] = useState(null);
   const [date, setDate] = useState(null);
-  const [month, setMonth] = useState(undefined);
+  const [month, setMonth] = useState(parse(appt.date));
   const [day, setDay] = useState(null);
   const [pick, setPick] = useState(null);
   const [busy, setBusy] = useState(false);
