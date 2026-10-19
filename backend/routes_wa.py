@@ -438,6 +438,42 @@ async def public_cancel_preview(slug: str, aid: str, request: Request):
     return E.cancel_preview(a, await E.appt_rules(a, c))
 
 
+@r.get("/public/salon/{slug}/appointments/{aid}/slots")
+async def public_resched_slots(slug: str, aid: str, request: Request, date: str = ""):
+    c = await public_company(slug)
+    phone = client_from_token(request, c["id"])
+    a = await one("appointments", {"id": aid, "company_id": c["id"], "client_phone": phone})
+    if not a:
+        raise HTTPException(404, "Cita no encontrada")
+    ru = await E.appt_rules(a, c)
+    svc = await one("services", {"id": a["service_id"]})
+    extra = a["duration"] - int(svc["duration"])
+    count = int(a.get("reschedule_count") or 0)
+    info = {"reschedule_hours": ru["reschedule_hours"], "max_reschedules": ru["max_reschedules"], "count": count,
+            "allowed": E.hours_left(a) >= float(ru["reschedule_hours"]) and count < int(ru["max_reschedules"]),
+            "min_date": (local_now() + timedelta(hours=float(ru["min_advance_hours"]))).strftime("%Y-%m-%d"),
+            "max_date": (local_now() + timedelta(days=int(ru["max_advance_days"]))).strftime("%Y-%m-%d"),
+            "holidays": c.get("settings", {}).get("holidays", []), "stylist_name": a["stylist_name"]}
+    if not date:
+        return info
+
+    async def get(d, st):
+        return await E.day_slots(c["id"], a["branch_id"], a["service_id"], d, st, exclude=aid, extra=extra, company=c, public=True)
+    own = await get(date, a["stylist_id"])
+    others = [] if own else [s for s in await get(date, None) if s["stylist_id"] != a["stylist_id"]]
+    next_days = []
+    if not own and not others:
+        d0 = datetime.strptime(date, "%Y-%m-%d")
+        for i in range(1, 22):
+            nd = (d0 + timedelta(days=i)).strftime("%Y-%m-%d")
+            if nd > info["max_date"] or len(next_days) == 3:
+                break
+            n = len(await get(nd, a["stylist_id"])) or len(await get(nd, None))
+            if n:
+                next_days.append({"date": nd, "count": n})
+    return {**info, "date": date, "own": own, "others": others, "next_days": next_days}
+
+
 @r.post("/public/salon/{slug}/appointments/{aid}")
 async def public_manage(slug: str, aid: str, request: Request, body: dict = Body(...)):
     c = await public_company(slug)

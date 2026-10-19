@@ -5,6 +5,7 @@ import { Label } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CancelDialog } from "@/components/Checkout";
+import { RescheduleDialog } from "@/pages/portal/RescheduleDialog";
 import { MapPin, Phone, Star, Instagram, Facebook } from "lucide-react";
 import { DAYS } from "@/lib/api";
 
@@ -82,8 +83,9 @@ export function MyAccount({ slug, onRepeat }) {
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
   const [acc, setAcc] = useState(null);
-  const [res, setRes] = useState({});
+  const [res] = useState({});
   const [cancel, setCancel] = useState(null);
+  const [resched, setResched] = useState(null);
   const [preview, setPreview] = useState(null);
   const openCancel = (a) => api.get(`/public/salon/${slug}/appointments/${a.id}/cancel-preview`, hdr()).then((r) => { setPreview(r.data); setCancel(a); }).catch((e) => toast.error(errMsg(e)));
   const tok = () => { const t = JSON.parse(sessionStorage.getItem(key) || "null"); return t && t.exp > Date.now() ? t.token : null; };
@@ -117,9 +119,7 @@ export function MyAccount({ slug, onRepeat }) {
             <div key={a.id} className="rounded-xl border p-3" data-testid={`my-appt-${a.id}`}>
               <div className="font-medium">{a.service_name} · {a.date} {a.time}–{a.end_time}</div><div className="text-muted-foreground">{a.stylist_name} · {a.branch_name}{a.deposit_status === "pending" ? ` · Anticipo pendiente ${money(a.deposit_required)}` : ""}</div>
               <div className="mt-2 flex flex-wrap gap-2">
-                <input type="date" className="field h-8 w-36" onChange={(e) => setRes({ ...res, [a.id]: { ...res[a.id], date: e.target.value } })} />
-                <input type="time" step="1800" className="field h-8 w-28" onChange={(e) => setRes({ ...res, [a.id]: { ...res[a.id], time: e.target.value } })} />
-                <Button size="sm" variant="outline" onClick={() => manage(a, "reschedule")} data-testid={`my-resched-${a.id}`}>Reprogramar</Button>
+                <Button size="sm" variant="outline" onClick={() => setResched(a)} data-testid={`my-resched-${a.id}`}>Reprogramar</Button>
                 <Button size="sm" variant="outline" onClick={() => manage(a, "confirm")}>Confirmar</Button>
                 <Button size="sm" variant="destructive" onClick={() => openCancel(a)} data-testid={`my-cancel-${a.id}`}>Cancelar</Button>
               </div>
@@ -132,6 +132,7 @@ export function MyAccount({ slug, onRepeat }) {
         </div>
       )}
       <CancelDialog open={!!cancel} client preview={preview} onClose={() => setCancel(null)} onConfirm={(reason) => manage(cancel, "cancel", { reason })} />
+      {resched && <RescheduleDialog slug={slug} appt={resched} hdr={hdr} onClose={() => setResched(null)} onDone={load} />}
     </section>
   );
 }
