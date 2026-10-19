@@ -449,8 +449,10 @@ async def public_resched_slots(slug: str, aid: str, request: Request, date: str 
     svc = await one("services", {"id": a["service_id"]})
     extra = a["duration"] - int(svc["duration"])
     count = int(a.get("reschedule_count") or 0)
+    br = await one("branches", {"id": a["branch_id"]}) or {}
     info = {"reschedule_hours": ru["reschedule_hours"], "max_reschedules": ru["max_reschedules"], "count": count,
-            "allowed": E.hours_left(a) >= float(ru["reschedule_hours"]) and count < int(ru["max_reschedules"]),
+            "allowed": a["status"] in ("pending", "confirmed") and E.hours_left(a) >= float(ru["reschedule_hours"]) and count < int(ru["max_reschedules"]),
+            "open_weekdays": sorted(int(k) for k in (br.get("hours") or {}).keys()),
             "min_date": (local_now() + timedelta(hours=float(ru["min_advance_hours"]))).strftime("%Y-%m-%d"),
             "max_date": (local_now() + timedelta(days=int(ru["max_advance_days"]))).strftime("%Y-%m-%d"),
             "holidays": c.get("settings", {}).get("holidays", []), "stylist_name": a["stylist_name"]}

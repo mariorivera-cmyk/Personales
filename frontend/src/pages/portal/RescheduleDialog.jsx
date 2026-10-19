@@ -15,7 +15,7 @@ function SlotButtons({ slots, pick, setPick, testid }) {
       {slots.map((s) => {
         const on = pick && pick.time === s.time && pick.stylist_id === s.stylist_id;
         return <button key={`${s.time}-${s.stylist_id}`} type="button" onClick={() => setPick(s)} data-testid={`resched-slot-${s.time.replace(":", "")}-${s.stylist_id}`}
-          className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${on ? "border-primary bg-primary text-primary-foreground" : "hover:bg-secondary"}`}>{s.time}{testid === "resched-others" && <span className="ml-1 text-xs opacity-75">· {s.stylist_name}</span>}</button>;
+          className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${on ? "border-primary bg-primary text-primary-foreground" : "hover:bg-secondary"}`}>{s.time}</button>;
       })}
     </div>
   );
@@ -24,6 +24,7 @@ function SlotButtons({ slots, pick, setPick, testid }) {
 export function RescheduleDialog({ slug, appt, hdr, onClose, onDone }) {
   const [info, setInfo] = useState(null);
   const [date, setDate] = useState(null);
+  const [month, setMonth] = useState(undefined);
   const [day, setDay] = useState(null);
   const [pick, setPick] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -31,6 +32,7 @@ export function RescheduleDialog({ slug, appt, hdr, onClose, onDone }) {
   useEffect(() => { api.get(base, hdr()).then((r) => setInfo(r.data)).catch((e) => { toast.error(errMsg(e)); onClose(); }); }, []); // eslint-disable-line
   useEffect(() => {
     if (!date) return;
+    setMonth(parse(date));
     setDay(null); setPick(null);
     api.get(base, { ...hdr(), params: { date } }).then((r) => setDay(r.data)).catch((e) => toast.error(errMsg(e)));
   }, [date]); // eslint-disable-line
@@ -41,7 +43,9 @@ export function RescheduleDialog({ slug, appt, hdr, onClose, onDone }) {
       toast.success(`Cita reprogramada para el ${date} a las ${pick.time}`); onDone(); onClose();
     } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
   };
-  const disabled = (d) => !info || ymd(d) < info.min_date.slice(0, 10) || ymd(d) > info.max_date || info.holidays.includes(ymd(d));
+  const disabled = (d) => !info || ymd(d) < info.min_date.slice(0, 10) || ymd(d) > info.max_date || info.holidays.includes(ymd(d))
+    || (info.open_weekdays.length > 0 && !info.open_weekdays.includes((d.getDay() + 6) % 7));
+  const groups = (day?.others || []).reduce((g, s) => ({ ...g, [s.stylist_name]: [...(g[s.stylist_name] || []), s] }), {});
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[92vh] max-w-md overflow-y-auto" data-testid="resched-dialog">
@@ -49,12 +53,13 @@ export function RescheduleDialog({ slug, appt, hdr, onClose, onDone }) {
           <DialogDescription>Cita actual: {appt.date} a las {appt.time} con {appt.stylist_name}.</DialogDescription></DialogHeader>
         {info && <p className="rounded-lg bg-secondary/60 p-2 text-xs" data-testid="resched-rule">Puede reprogramar hasta {info.reschedule_hours} h antes, máximo {info.max_reschedules} {info.max_reschedules === 1 ? "vez" : "veces"} por cita (lleva {info.count}).</p>}
         {info && !info.allowed ? <p className="text-sm font-medium text-rose-700" data-testid="resched-not-allowed">Esta cita ya no se puede reprogramar en línea. Comuníquese con el salón.</p> : <>
-          <Calendar mode="single" locale={es} selected={date ? parse(date) : undefined} onSelect={(d) => d && setDate(ymd(d))} disabled={disabled}
+          <Calendar mode="single" locale={es} month={month} onMonthChange={setMonth} selected={date ? parse(date) : undefined} onSelect={(d) => d && setDate(ymd(d))} disabled={disabled}
             fromDate={info ? parse(info.min_date) : undefined} toDate={info ? parse(info.max_date) : undefined} className="mx-auto rounded-xl border" data-testid="resched-calendar" />
           {date && !day && <p className="text-center text-sm text-muted-foreground">Buscando horarios…</p>}
           {day && <div className="space-y-3 text-sm">
             {day.own.length > 0 && <div><p className="mb-1.5 font-medium">Horarios con {day.stylist_name}</p><SlotButtons slots={day.own} pick={pick} setPick={setPick} testid="resched-own" /></div>}
-            {!day.own.length && day.others.length > 0 && <div><p className="mb-1.5 font-medium" data-testid="resched-others-msg">{day.stylist_name} no tiene espacio ese día. Disponible con otra estilista:</p><SlotButtons slots={day.others} pick={pick} setPick={setPick} testid="resched-others" /></div>}
+            {!day.own.length && day.others.length > 0 && <div><p className="mb-1.5 font-medium" data-testid="resched-others-msg">{day.stylist_name} no tiene espacio ese día. Disponible con otra estilista:</p>
+              <div className="space-y-2" data-testid="resched-others">{Object.entries(groups).map(([n, ss]) => <div key={n}><p className="mb-1 text-xs font-semibold text-muted-foreground">{n}</p><SlotButtons slots={ss} pick={pick} setPick={setPick} testid={`resched-others-${ss[0].stylist_id}`} /></div>)}</div></div>}
             {!day.own.length && !day.others.length && <div data-testid="resched-no-slots"><p className="mb-1.5 font-medium">Ese día no hay espacio. Próximos días con horario:</p>
               <div className="flex flex-wrap gap-2">{day.next_days.map((n) => <Button key={n.date} size="sm" variant="outline" onClick={() => setDate(n.date)} data-testid={`resched-next-${n.date}`}>{n.date} ({n.count})</Button>)}
                 {!day.next_days.length && <span className="text-muted-foreground">No encontramos horarios cercanos; comuníquese con el salón.</span>}</div></div>}
@@ -62,7 +67,7 @@ export function RescheduleDialog({ slug, appt, hdr, onClose, onDone }) {
         </>}
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose} data-testid="resched-cancel">Cancelar</Button>
-          <Button onClick={save} disabled={!pick || busy} data-testid="resched-confirm">{pick ? `Confirmar ${date} ${pick.time}` : "Elija un horario"}</Button>
+          {(!info || info.allowed) && <Button onClick={save} disabled={!pick || busy} data-testid="resched-confirm">{pick ? `Confirmar ${date} ${pick.time}` : "Elija un horario"}</Button>}
         </div>
       </DialogContent>
     </Dialog>

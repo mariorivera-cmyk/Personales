@@ -120,7 +120,7 @@ export function MyAccount({ slug, onRepeat }) {
               <div className="font-medium">{a.service_name} · {a.date} {a.time}–{a.end_time}</div><div className="text-muted-foreground">{a.stylist_name} · {a.branch_name}{a.deposit_status === "pending" ? ` · Anticipo pendiente ${money(a.deposit_required)}` : ""}</div>
               <div className="mt-2 flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" onClick={() => setResched(a)} data-testid={`my-resched-${a.id}`}>Reprogramar</Button>
-                <Button size="sm" variant="outline" onClick={() => manage(a, "confirm")}>Confirmar</Button>
+                <Button size="sm" variant="outline" onClick={() => manage(a, "confirm")} data-testid={`my-confirm-${a.id}`}>Confirmar</Button>
                 <Button size="sm" variant="destructive" onClick={() => openCancel(a)} data-testid={`my-cancel-${a.id}`}>Cancelar</Button>
               </div>
             </div>

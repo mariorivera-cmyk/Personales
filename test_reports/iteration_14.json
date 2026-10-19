@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 14: tested portal 'Mis citas' reschedule calendar. Backend: 11/11 pytest pass (slots endpoint auth 401/404, info w/o date, own slots incl. self time, others when own stylist blocked, no-slots + next_days on closed Sunday, holiday, reschedule same/other stylist persists with reschedule_count+1, max reached -> allowed=false + POST 409, <12h -> allowed=false). Frontend: no native date/time inputs; dialog with rule text and Spanish calendar (octubre 2026, lu..do); past days and holiday disabled; own slots, others (with stylist names + message), no-slots with next-day buttons that load that date; confirm label 'Confirmar <date> <time>', toast 'Cita reprogramada para el ...', dialog closes, card updated; cancel closes; not-allowed state hides calendar; mobile 390px dialog fits (width 390, scrollable). One functional UX bug: calendar month does not follow jumps to another month.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "GET /api/public/salon/{slug}/appointments/{aid}/slots", "issue": "'allowed' doesn't check appointment status (cancelled/completed appts would report allowed=true); only matters if called directly. Calendar also doesn't know branch closed weekdays (e.g. Zona 10 Sunday enabled, then shows no-slots) - could return closed weekdays in info to disable them."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "RescheduleDialog calendar", "issue": "Calendar month is uncontrolled: clicking a resched-next-<date> button (or an outside day) in a different month (e.g. from Nov 1 -> 2026-11-02) loads the slots but the calendar stays on 'octubre 2026' with no visible selected day. Fix: add month state (const [month,setMonth]=useState()) and pass month/onMonthChange to <Calendar>, setMonth(parse(date)) whenever date changes.", "selector": "[data-testid^='resched-next-']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "RescheduleDialog", "issues": ["In not-allowed state the disabled 'Elija un horario' confirm button is still shown; hide it", "resched-others list can be very long (38 buttons interleaved Diego/Lucía); consider grouping by stylist", "Portal 'Confirmar' button on appointment card lacks data-testid"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter14_resched_calendar.py", "/app/backend/tests/ui_iter14_resched_seed.py", "/app/test_reports/pytest/pytest_iter14.xml"],
+  "action_items": ["Control Calendar month in RescheduleDialog so jumps to next-month dates navigate the view", "Optional: hide confirm button when not allowed; disable branch-closed weekdays in calendar; check status in allowed"],
+  "critical_code_review_comments": ["RescheduleDialog.jsx: useEffect deps suppressed with eslint-disable; fine but no loading/error UI for initial info fetch beyond toast+close", "routes_wa.public_resched_slots: next_days loop does up to 2 day_slots calls x 21 days - acceptable but can be slow on busy salons"],
+  "updated_files": ["/app/backend/tests/test_iter14_resched_calendar.py", "/app/backend/tests/ui_iter14_resched_seed.py"],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "seed_data_creation": "TEST_Resched appointments/clients on bellavida (phones +5025501440x), a TEST_resched_block for Carla, and temporary holiday 2026-10-30 - all removed after testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: python -m pytest -c /dev/null backend/tests/test_iter14_resched_calendar.py (self-cleaning). Carla is NOT authorized for 'Corte de cabello'; use 'Tratamiento capilar' (81a40e910fdd) for any stylist. For UI: python3 backend/tests/ui_iter14_resched_seed.py prints appt ids + client token; set sessionStorage ctok_bellavida={token,exp}. Server date is Oct 2026. Clean with db.appointments.delete_many({client_name:/^TEST_Resched/})."
+}
