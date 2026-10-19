@@ -34,6 +34,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem("token", data.token);
     localStorage.removeItem("company_ctx");
     setSetup(null);
+    sessionStorage.removeItem("pending_min");
     await refresh();
     return data.user;
   };
@@ -44,6 +45,7 @@ export function AuthProvider({ children }) {
     setUser(false);
     setCompany(null);
     setSetup(null);
+    sessionStorage.removeItem("pending_min");
   };
   const enterCompany = async (id) => {
     if (id) localStorage.setItem("company_ctx", id);

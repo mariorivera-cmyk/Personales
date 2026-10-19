@@ -17,7 +17,7 @@ export function Onboarding() {
     if (company && !company.setup_complete) checkSetup();
   }).catch(() => {});
   useEffect(() => { load(); }, []); // eslint-disable-line
-  if (!d || d.dismissed) return null;
+  if (!d || d.dismissed || (d.skipped && !d.setup_complete)) return null;
   const done = d.steps.filter((s) => s.done).length;
   const req = d.steps.filter((s) => d.required.includes(s.key));
   const share = async () => {

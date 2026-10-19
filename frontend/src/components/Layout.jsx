@@ -80,7 +80,7 @@ export default function Layout() {
           <div className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-widest text-slate-500">{company.name}</div>
           {items.map((n) => <Item key={n.to} n={n} onClick={() => setOpen(false)} />)}
           {setup && <p className="mx-3 mt-4 rounded-lg bg-white/5 p-3 text-xs leading-relaxed text-slate-400" data-testid="setup-nav-note">Cada opción aparece al completar el paso anterior de la guía de arranque.</p>}
-          {pendingSkip && <NavLink to="/app" onClick={() => setOpen(false)} className="mx-3 mt-4 flex items-center gap-2 rounded-lg bg-amber-400/15 p-3 text-xs font-semibold text-amber-200 hover:bg-amber-400/25" data-testid="setup-pending-indicator">Faltan {setupInfo.pending.length} paso{setupInfo.pending.length === 1 ? "" : "s"} para dejar su salón listo →</NavLink>}
+          {pendingSkip && <NavLink to="/app" onClick={() => setOpen(false)} className="mx-3 mt-4 flex items-center gap-2 rounded-lg bg-amber-400/15 p-3 text-xs font-semibold text-amber-200 hover:bg-amber-400/25" data-testid="setup-pending-indicator">{setupInfo.pending.length === 1 ? "Falta 1 paso" : `Faltan ${setupInfo.pending.length} pasos`} para dejar su salón listo →</NavLink>}
         </>}
       </nav>
       <div className="border-t border-white/10 pt-3">

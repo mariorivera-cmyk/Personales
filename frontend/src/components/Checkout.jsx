@@ -95,7 +95,7 @@ export function CancelDialog({ open, onClose, onConfirm, title = "¿Cancelar est
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-sm" data-testid="cancel-dialog">
         <DialogHeader><DialogTitle className="font-heading">{title}</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">El horario quedará libre y se avisará a la lista de espera.</p>
+        <p className="text-sm text-muted-foreground">{client ? "Si cancela, este horario quedará disponible para otras clientas." : "El horario quedará libre y se avisará a la lista de espera."}</p>
         {preview && <CancelPolicyInfo p={preview} apply={apply} setApply={setApply} client={client} />}
         <div><Label>Motivo (opcional)</Label><input className="field" value={reason} onChange={(e) => setReason(e.target.value)} data-testid="cancel-reason-input" /></div>
         <div className="flex justify-end gap-2">

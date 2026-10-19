@@ -1,0 +1,39 @@
+{
+  "summary": "Tested N1 (skip the setup guide and show pending steps), N2 (description and address as separate steps with links to the exact field), and N3 (portal 'Mis citas' cancel dialog explains the policy), plus regressions. Backend: 13/13 pytest pass. They cover: pending list with keys services, stylists, description, address, rules, bank; hints and 'to' links; public portal 403 'preparando'; share before ready returns 400; skip plus audit entry 'Guía de arranque omitida'; receptionist skip returns 403; creating a service updates pending; bank step pending until both bank_name and bank_account are set; disabling the deposit removes the bank step; completing everything gives portal 200 and share 200; cancel-preview for >24h (late false, 'sin penalización', policy text) and <24h (late true, 'tardía'); 401 without client token; 404 for another phone. UI: all requested flows pass except one bug (minimized state survives logout/login).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/onboarding", "issue": "For an already complete company (bellavida) 'pending' still lists steps that are not done now (e.g. ['bank']), because setup_complete never resets. The UI hides it because checkSetup skips complete companies. Any future consumer of 'pending' could show a wrong block."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PendingSteps (Onboarding.jsx)", "issue": "After pressing pending-minimize, then logout and login in the same tab, the block shows but stays minimized (list hidden). The requirement says it must show expanded again after login. Cause: sessionStorage 'pending_min' is not cleared on logout/login. Fix: call sessionStorage.removeItem('pending_min') in logout (Auth.logout) or on login.", "selector": "[data-testid=pending-minimize]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Share step before ready", "issue": "The client-side error toast in Onboarding.share ('Antes de compartir complete: ...') can never be reached. Before setup is complete the share item always shows as locked (onboarding-locked-share), and this is also true in skipped mode. Only the backend 400 protects it. Either show the share button (unlocked) in skipped mode so the toast is reachable, or treat this as acceptable.", "affected_selectors": ["onboarding-share", "onboarding-locked-share"]}
+    ],
+    "design_issues": [
+      {"screen": "Dashboard after skipping", "issues": ["The full 'Guía de arranque' panel still shows under the pending block, in guided-mode wording ('Paso 1 de 6: complete cada paso en orden; al terminarlo aparece el siguiente en el menú'). It shows lock icons and has a second 'Omitir por ahora' button, even though the menu is already unlocked. This repeats the pending list and contradicts it. Hide the Onboarding panel (or its order text, locks and skip button) when skipped.", "Indicator text with 1 step reads 'Faltan 1 paso...'. It should be 'Falta 1 paso...'."]},
+      {"screen": "Portal Mis citas cancel dialog", "issues": ["The text 'El horario quedará libre y se avisará a la lista de espera' is staff-oriented and is shown to the client.", "The success toast after a client cancel only says 'Listo'. It could confirm whether the cancellation was on time or late.", "The reschedule inputs in Mis citas use the browser's native date/time pickers (mm/dd/yyyy) instead of the shadcn calendar (existing issue)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_skip_guide_cancel_policy.py", "/app/backend/tests/ui_iter12_seed.py", "/app/backend/tests/ui_iter12_portal_seed.py", "/app/test_reports/pytest/pytest_iter12.xml"],
+  "action_items": [
+    "Clear sessionStorage 'pending_min' on logout/login so the pending block shows expanded after login (N1.3)",
+    "When onboarding.skipped is true, hide the guided-mode parts of the Onboarding panel on the Dashboard (order text, locks, duplicate 'Omitir por ahora'), or hide the panel",
+    "Optional: make onboarding-share clickable in skipped mode so the 'missing steps' toast can actually appear; fix 'Falta 1 paso' wording; use client-facing text in the client cancel dialog"
+  ],
+  "critical_code_review_comments": [
+    "routes_extra.setup_steps: setup_complete is sticky. Once true, the portal stays open even if the address or service is later removed. This seems to be the intended design, but 'pending' is still returned for complete companies.",
+    "cancel_preview: when cancel_enabled is false, client_consequence still says 'Está dentro del plazo...'. A clearer message would be that there is no cancellation penalty.",
+    "Branches address-missing banner depends on setup.pending, which is only filled while setup is incomplete. That is fine for this flow."
+  ],
+  "updated_files": ["/app/backend/tests/test_skip_guide_cancel_policy.py", "/app/backend/tests/ui_iter12_seed.py", "/app/backend/tests/ui_iter12_portal_seed.py"],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "~93% (1 medium bug: minimized state persists across logout/login)"},
+  "seed_data_creation": "Created TEST_Skip and TEST_UI12 companies and TEST_Portal appointments and clients on bellavida. All were deleted: 0 TEST_ companies left; 8 bellavida TEST appointments and 4 TEST clients removed. bellavida rules were not changed. salon-retest-trinity was not touched. No company with slug 'wwwpruebacom' exists in the DB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest backend/tests/test_skip_guide_cancel_policy.py -p no:xdist. The client portal token can be minted with JWT_SECRET (type client), or obtained by reading the OTP from db.wa_messages kind 'otp' (OTP is only sent if the client exists; limit 3 per hour per phone). For UI, inject sessionStorage ctok_<slug> = {token, exp}. The browser automation environment has no pymongo.",
+  "rca of the issue": "Pending block stays minimized after re-login: PendingSteps reads sessionStorage.pending_min on mount, and logout does not clear it. Reproduce: skip guide, press Minimizar, Cerrar sesión, log in again in the same tab, and the list is hidden. Fix: remove the key in Auth.logout()."
+}

@@ -95,7 +95,7 @@ export function MyAccount({ slug, onRepeat }) {
     try { const r = await api.post(`/public/salon/${slug}/otp/verify`, { phone, code }); sessionStorage.setItem(key, JSON.stringify({ token: r.data.token, exp: Date.now() + 29 * 60000 })); load(); } catch (e) { toast.error(errMsg(e)); }
   };
   const manage = async (a, action, extra = {}) => {
-    try { await api.post(`/public/salon/${slug}/appointments/${a.id}`, { action, ...(res[a.id] || {}), ...extra }, hdr()); toast.success("Listo"); setCancel(null); load(); } catch (e) { toast.error(errMsg(e)); }
+    try { await api.post(`/public/salon/${slug}/appointments/${a.id}`, { action, ...(res[a.id] || {}), ...extra }, hdr()); toast.success(action === "cancel" ? "Su cita fue cancelada" : action === "confirm" ? "Cita confirmada" : "Cita reprogramada"); setCancel(null); load(); } catch (e) { toast.error(errMsg(e)); }
   };
   const del = async () => { if (!window.confirm("¿Solicitar el borrado de sus datos personales?")) return; const r = await api.post(`/public/salon/${slug}/account/delete-request`, {}, hdr()); toast.success(r.data.message); };
   return (
