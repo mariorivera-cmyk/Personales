@@ -72,6 +72,11 @@ Super Administrador, Administrador de Empresa, Gerente de Sucursal, Recepcionist
 - Se quitó el botón global "Ejecutar ciclo de cobro" y su endpoint (el cobro automático sigue corriendo en segundo plano).
 - En el detalle de cada empresa: "Cobro adelantado" con vista previa (periodo siguiente, detalle, IVA, total, tarjeta) y casilla de confirmación. Solo empresas activas/en prueba, con tarjeta y sin facturas pendientes. Si se aprueba, el próximo cobro pasa al fin del periodo cobrado; si la tarjeta rechaza, la factura se anula y el estado no cambia.
 
+## Implemented (2026-10-19) — Tercera prueba N1–N3
+- N1: "Omitir por ahora" desbloquea el menú (auditoría); bloque "Pasos mínimos pendientes" en Dashboard (minimizable por sesión, vuelve al iniciar sesión), indicador "Faltan N pasos" en el menú, "Retomar guía". Pasos calculados con datos reales: servicios activos con duración/precio, estilista activa con sucursal y horario, descripción, dirección de cada sucursal, reglas revisadas, datos bancarios si el anticipo está activo; compartir enlace solo al completar. Portal y WhatsApp siguen en pausa hasta completar.
+- N2: descripción y dirección separadas, con texto de qué falta y enlace al campo exacto resaltado (?focus=description / address / bank_name).
+- N3: cancelar desde "Mis citas" muestra la política del salón, aviso de cancelación tardía y reembolso del anticipo. Probado: iteration_12 y 13.
+
 ## Backlog
 - P0: Conectar WhatsApp Cloud API real (token + phone number id por empresa); pasarela Recurrente; FEL con INFILE/Digifact.
 - P1: Cobro de anticipos a clientes finales (sección 7); emails reales (Resend); subdominio por empresa; object storage para archivos.

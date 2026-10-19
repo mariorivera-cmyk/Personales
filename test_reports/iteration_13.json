@@ -1,0 +1,21 @@
+{
+  "summary": "Retest of the fixes from iteration_12 (N1/N2/N3). Everything passes. Backend: 14/14 pytest pass (the new test_iter13_retest.py plus the regression test_skip_guide_cancel_policy.py). GET /api/onboarding for bellavida now returns pending [] and current null. UI checks on a new TEST_ salon (created by API signup), after skipping the guide: only the pending-steps block shows; onboarding-panel count is 0; there are no locks, no 'Paso X de Y' text and no second skip button; 6 pending items show. Minimize, then logout: sessionStorage pending_min is null. After login again the block is expanded (6 items, button reads 'Minimizar'). pending-resume-guide brings back guided mode (setup-home and onboarding-panel shown, pending block and sidebar indicator hidden). Sidebar indicator reads 'Faltan 6 pasos para dejar su salón listo →' with 6 pending and 'Falta 1 paso para dejar su salón listo →' with 1 pending (bank). In the portal (bellavida, client token injected), the Mis citas cancel dialog shows 'Si cancela, este horario quedará disponible para otras clientas.' with no 'lista de espera' wording and no apply-policy checkbox. The success toast reads 'Su cita fue cancelada'. In the staff Agenda, the cancel dialog for a late appointment still has cancel-apply-policy (checked).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Staff Agenda cancel dialog (late)", "issues": ["Two lines say almost the same thing: 'Se registra y se avisa a la clienta por WhatsApp.' and 'Se enviará un aviso de cancelación a la clienta por WhatsApp.' Consider merging them (cosmetic)."]},
+      {"screen": "Portal Mis citas", "issues": ["The reschedule inputs still use the browser's native date/time pickers (mm/dd/yyyy), not the shadcn calendar (existing issue, not part of this retest)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter13_retest.py", "/app/backend/tests/test_skip_guide_cancel_policy.py", "/app/backend/tests/ui_iter13_one_pending.py", "/app/backend/tests/cleanup_iter13.py", "/app/test_reports/pytest/pytest_iter13.xml"],
+  "action_items": ["Optional: merge the duplicated WhatsApp notice lines in the staff CancelDialog", "Optional: replace the native date/time inputs in portal Mis citas with the shadcn calendar"],
+  "critical_code_review_comments": ["The PendingSteps 'min' state is read from sessionStorage only when the component mounts. This works because logout navigates to /login and unmounts it, but it relies on that unmount."],
+  "updated_files": ["/app/backend/tests/test_iter13_retest.py", "/app/backend/tests/ui_iter13_one_pending.py", "/app/backend/tests/cleanup_iter13.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Created TEST_UI12 company test-ui12-1792442487 and 2 TEST_Portal UI appointments on bellavida. All deleted with cleanup_iter13.py. salon-retest-trinity and wwwpruebacom were not touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run pytest with -c /dev/null (backend/pytest.ini adds xdist args): python -m pytest -c /dev/null backend/tests/test_iter13_retest.py backend/tests/test_skip_guide_cancel_policy.py. To get a company with exactly 1 pending step: run ui_iter12_seed.py, then ui_iter13_one_pending.py <email>. For a client portal token, mint a JWT with JWT_SECRET {sub: phone, cid, type: 'client'} and set sessionStorage ctok_<slug> = {token, exp}. Clean up with cleanup_iter13.py."
+}
