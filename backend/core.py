@@ -144,8 +144,11 @@ async def audit(user, cid, action, entity, detail=""):
 
 
 async def wa_send(cid, phone, text, kind="bot"):
-    await db.wa_messages.insert_one({"id": uid(), "company_id": cid, "phone": phone, "direction": "out",
+    from wa_cloud import deliver
+    mid = uid()
+    await db.wa_messages.insert_one({"id": mid, "company_id": cid, "phone": phone, "direction": "out",
                                      "text": text, "kind": kind, "created_at": now_iso()})
+    await db.wa_messages.update_one({"id": mid}, {"$set": await deliver(cid, phone, text, kind)})
 
 
 def portal_url(slug, path=""):

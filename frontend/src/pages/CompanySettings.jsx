@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useSearchParams } from "react-router-dom";
 import CrudPage, { FieldInput } from "@/components/CrudPage";
 import { SalonRules } from "@/components/SalonRules";
+import { WhatsAppConnect } from "@/components/WhatsAppConnect";
 
 function General() {
   const { company, refresh, checkSetup } = useAuth();
@@ -91,9 +92,10 @@ export default function CompanySettings() {
     <div data-testid="settings-page">
       <PageHeader title="Configuración" subtitle="Empresa, usuarios y trazabilidad" />
       <Tabs value={params.get("tab") || "general"} onValueChange={(v) => setParams({ tab: v })}>
-        <TabsList className="mb-6 flex-wrap"><TabsTrigger value="general" data-testid="tab-general">General</TabsTrigger><TabsTrigger value="reglas" data-testid="tab-rules">Reglas del salón</TabsTrigger>{admin && <><TabsTrigger value="users" data-testid="tab-users">Usuarios y roles</TabsTrigger><TabsTrigger value="audit" data-testid="tab-audit">Auditoría</TabsTrigger></>}</TabsList>
+        <TabsList className="mb-6 flex-wrap"><TabsTrigger value="general" data-testid="tab-general">General</TabsTrigger><TabsTrigger value="reglas" data-testid="tab-rules">Reglas del salón</TabsTrigger>{user?.role === "company_admin" && <TabsTrigger value="whatsapp" data-testid="tab-whatsapp">WhatsApp</TabsTrigger>}{admin && <><TabsTrigger value="users" data-testid="tab-users">Usuarios y roles</TabsTrigger><TabsTrigger value="audit" data-testid="tab-audit">Auditoría</TabsTrigger></>}</TabsList>
         <TabsContent value="general"><General /></TabsContent>
         <TabsContent value="reglas"><SalonRules /></TabsContent>
+        {user?.role === "company_admin" && <TabsContent value="whatsapp"><WhatsAppConnect /></TabsContent>}
         <TabsContent value="users">
           <CrudPage embedded endpoint="/users" testid="users" defaults={{ role: "receptionist", active: true }}
             fields={[

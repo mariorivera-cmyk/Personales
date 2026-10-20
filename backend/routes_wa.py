@@ -9,6 +9,7 @@ from core import (db, find, one, uid, now_iso, today, local_now, insert, guard, 
                   make_client_token, client_from_token, notify_company, audit)
 import engine as E
 import rules as R
+import wa_cloud as WC
 from routes_ops import waitlist_entry
 
 r = APIRouter(prefix="/api")
@@ -126,13 +127,13 @@ async def execute(company, phone, action):
     return {"ok": False, "error": "Acción desconocida"}
 
 
-async def handle_inbound(to_number, phone, text):
-    company = await one("companies", {"whatsapp_number": norm_phone(to_number)})
+async def handle_inbound(to_number, phone, text, company=None, wa_id=""):
+    company = company or await one("companies", {"whatsapp_number": norm_phone(to_number)})
     if not company:
         raise HTTPException(404, "Número de WhatsApp no asociado a ninguna empresa")
     cid, phone = company["id"], norm_phone(phone)
     history = await find("wa_messages", {"company_id": cid, "phone": phone}, [("created_at", -1)], 12)
-    await insert("wa_messages", {"id": uid(), "company_id": cid, "phone": phone, "direction": "in", "text": text, "kind": "client", "created_at": now_iso()})
+    await insert("wa_messages", {"id": uid(), "company_id": cid, "phone": phone, "direction": "in", "text": text, "kind": "client", "wa_id": wa_id, "created_at": now_iso()})
     if company["status"] in ("suspended", "cancelled", "paused"):
         reply = company.get("settings", {}).get("suspension_message") or SUSPENDED_MSG
     elif "whatsapp" not in company.get("enabled_modules", []) or not company.get("setup_complete"):
@@ -178,14 +179,29 @@ async def meta_verify(request: Request):
 
 
 @r.post("/wa/webhook")
-async def meta_webhook(body: dict = Body(...)):
+async def meta_webhook(request: Request):
+    raw = await request.body()
+    if not WC.valid_signature(raw, request.headers.get("X-Hub-Signature-256")):
+        raise HTTPException(401, "Firma inválida")
+    body = json.loads(raw or b"{}")
     for entry in body.get("entry", []):
         for ch in entry.get("changes", []):
             v = ch.get("value", {})
-            to = v.get("metadata", {}).get("display_phone_number", "")
+            if ch.get("field") == "message_template_status_update":
+                await WC.on_template_status(entry.get("id"), v)
+                continue
+            await WC.on_status(v)
+            meta = v.get("metadata", {})
+            conn = await one("wa_connections", {"phone_number_id": meta.get("phone_number_id"), "status": "connected"})
+            company = await one("companies", {"id": conn["company_id"]}) if conn else None
             for msg in v.get("messages", []):
+                if not msg.get("id") or await db.wa_messages.find_one({"wa_id": msg["id"]}):
+                    continue
                 if msg.get("type") == "text":
-                    await handle_inbound(to, msg["from"], msg["text"]["body"])
+                    try:
+                        await handle_inbound(meta.get("display_phone_number", ""), msg["from"], msg["text"]["body"], company, msg["id"])
+                    except HTTPException:
+                        pass
     return {"ok": True}
 
 

@@ -172,10 +172,15 @@ async def signup(response: Response, body: dict = Body(...)):
 @r.get("/admin/companies")
 async def list_companies(u=Depends(super_admin)):
     out = []
+    wa = {x["company_id"]: x for x in await find("wa_connections", {"status": "connected"})}
     for c in await find("companies", {}, [("created_at", -1)]):
         st = await statement(c)
         c.pop("settings", None)
-        out.append({**c, "plan_name": st["plan"].get("name", ""), "mrr": await monthly_value(c), "balance": st["balance"]})
+        w = wa.get(c["id"])
+        tpl = (w or {}).get("templates") or {}
+        out.append({**c, "plan_name": st["plan"].get("name", ""), "mrr": await monthly_value(c), "balance": st["balance"],
+                    "wa_cloud": {"connected": bool(w), "number": (w or {}).get("display_phone_number", ""),
+                                 "approved": sum(1 for x in tpl.values() if x.get("status") == "APPROVED"), "total": 8}})
     return out
 
 

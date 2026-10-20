@@ -79,12 +79,15 @@ export default function AdminCompanies() {
       <div className="overflow-x-auto rounded-2xl border bg-white">
         <table className="w-full text-sm" data-testid="companies-table">
           <thead className="bg-secondary/60 text-left text-xs uppercase tracking-wider text-slate-500">
-            <tr>{["Empresa", "NIT", "Plan", "Estado", "MRR", "Saldo", "Próximo cobro", ""].map((h) => <th key={h} className="px-4 py-3">{h}</th>)}</tr>
+            <tr>{["Empresa", "NIT", "Plan", "Estado", "WhatsApp", "MRR", "Saldo", "Próximo cobro", ""].map((h) => <th key={h} className="px-4 py-3">{h}</th>)}</tr>
           </thead>
           <tbody>{rows.map((c) => (
             <tr key={c.id} className="border-t hover:bg-secondary/30" data-testid={`company-row-${c.slug}`}>
               <td className="px-4 py-3"><div className="font-medium">{c.name}</div><div className="text-xs text-muted-foreground">{c.whatsapp_number} · /b/{c.slug}</div></td>
               <td className="px-4 py-3">{c.nit}</td><td className="px-4 py-3">{c.plan_name}</td><td className="px-4 py-3"><CompanyBadge status={c.status} /></td>
+              <td className="px-4 py-3" data-testid={`company-wa-${c.slug}`}>{c.wa_cloud?.connected
+                ? <div><span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Conectado</span><div className="mt-1 text-xs text-muted-foreground">{c.wa_cloud.number} · {c.wa_cloud.approved}/{c.wa_cloud.total} plantillas</div></div>
+                : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Simulador</span>}</td>
               <td className="px-4 py-3">{money(c.mrr, c.currency)}</td><td className="px-4 py-3">{money(c.balance, c.currency)}</td>
               <td className="px-4 py-3">{c.next_billing_date || c.trial_ends || "—"}</td>
               <td className="whitespace-nowrap px-4 py-3 text-right">
