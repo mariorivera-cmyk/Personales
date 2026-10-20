@@ -87,3 +87,15 @@ Super Administrador, Administrador de Empresa, Gerente de Sucursal, Recepcionist
 
 ## Next tasks
 Integrar WhatsApp real y la pasarela cuando el usuario tenga las credenciales.
+
+
+## Implemented (2026-10-20) — Botón "Conectar con WhatsApp" (Meta Cloud API, Embedded Signup)
+- backend/wa_cloud.py: /api/wa-cloud/status|connect|templates/sync|disconnect (solo company_admin). Intercambio de code, registro opcional con PIN, suscripción de WABA, token cifrado en colección wa_connections (nunca expuesto), creación automática de 8 plantillas en español (confirmación, recordatorio, cambio, cancelación, código OTP autenticación, anticipo, reseña, promoción).
+- core.wa_send → deliver(): si el salón está conectado envía texto dentro de la ventana de 24 h o plantilla aprobada fuera de ella; guarda delivery (simulated/sent/failed/delivered/read).
+- Webhook /api/wa/webhook: firma X-Hub-Signature-256 (si META_APP_SECRET), enrutamiento por phone_number_id, deduplicación por wa_id, estados de entrega y de plantillas.
+- UI: pestaña Configuración → WhatsApp (solo dueño); columna WhatsApp en Empresas (super admin).
+- PENDIENTE: llenar META_APP_ID, META_APP_SECRET, META_CONFIG_ID en backend/.env (y WA_VERIFY_TOKEN), configurar webhook {URL}/api/wa/webhook en Meta (campos messages y message_template_status_update), App Review como Tech Provider. Sin esto el botón muestra "Pendiente de configuración" y todo sigue en simulador.
+
+## Backlog
+- P1: Activar credenciales Meta y probar conexión real con un número de prueba.
+- P2: Botones "Enviar por WhatsApp" manuales (wa.me) mientras no haya conexión; horarios con botones interactivos en el asistente.

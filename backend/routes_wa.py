@@ -183,7 +183,10 @@ async def meta_webhook(request: Request):
     raw = await request.body()
     if not WC.valid_signature(raw, request.headers.get("X-Hub-Signature-256")):
         raise HTTPException(401, "Firma inválida")
-    body = json.loads(raw or b"{}")
+    try:
+        body = json.loads(raw or b"{}")
+    except ValueError:
+        raise HTTPException(400, "JSON inválido")
     for entry in body.get("entry", []):
         for ch in entry.get("changes", []):
             v = ch.get("value", {})

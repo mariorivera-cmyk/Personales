@@ -154,7 +154,7 @@ async def templates_sync(c=Depends(guard(OWNER))):
 
 @r.post("/wa-cloud/disconnect")
 async def disconnect(c=Depends(guard(OWNER))):
-    conn = await one("wa_connections", {"company_id": c["cid"]})
+    conn = await one("wa_connections", {"company_id": c["cid"], "status": "connected"})
     if not conn:
         raise HTTPException(409, "WhatsApp no está conectado")
     await db.wa_connections.update_one({"company_id": c["cid"]}, {"$set": {"status": "disconnected", "token": "", "disconnected_at": now_iso()}})
@@ -212,5 +212,10 @@ async def on_template_status(waba_id, value):
 
 
 async def on_status(value):
+    rank = {"sent": 1, "delivered": 2, "read": 3, "failed": 4}
     for s in value.get("statuses", []):
-        await db.wa_messages.update_one({"wa_id": s.get("id")}, {"$set": {"delivery": s.get("status", "")}})
+        st = s.get("status", "")
+        if not s.get("id") or st not in rank:
+            continue
+        lower = [k for k, v in rank.items() if v < rank[st]] + ["simulated"]
+        await db.wa_messages.update_one({"wa_id": s["id"], "delivery": {"$in": lower}}, {"$set": {"delivery": st}})

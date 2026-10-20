@@ -176,6 +176,8 @@ async def list_companies(u=Depends(super_admin)):
     for c in await find("companies", {}, [("created_at", -1)]):
         st = await statement(c)
         c.pop("settings", None)
+        if isinstance(c.get("card"), dict):
+            c["card"] = {k: v for k, v in c["card"].items() if k != "token"}
         w = wa.get(c["id"])
         tpl = (w or {}).get("templates") or {}
         out.append({**c, "plan_name": st["plan"].get("name", ""), "mrr": await monthly_value(c), "balance": st["balance"],

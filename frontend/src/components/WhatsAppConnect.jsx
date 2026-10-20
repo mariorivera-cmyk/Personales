@@ -107,7 +107,7 @@ export function WhatsAppConnect() {
       <p className="mb-4 text-sm text-muted-foreground">Conecte el número de WhatsApp de su salón. Se abrirá la ventana oficial de Meta para iniciar sesión y elegir el número. Al terminar, SalonFlow crea las 8 plantillas de mensajes y los recordatorios, confirmaciones y el asistente funcionarán por WhatsApp real.</p>
       {connected ? <Connected s={s} setS={setS} reload={load} /> : s.enabled ? <ConnectButton s={s} setS={setS} /> : (
         <div data-testid="wa-pending">
-          <Button size="lg" disabled className="bg-[#25D366] text-white" data-testid="wa-connect-btn-pending"><Clock className="mr-2 h-5 w-5" />Pendiente de configuración</Button>
+          <Button size="lg" disabled variant="secondary" className="disabled:opacity-100 text-slate-600" data-testid="wa-connect-btn-pending"><Clock className="mr-2 h-5 w-5" />Pendiente de configuración</Button>
           <p className="mt-2 text-xs text-muted-foreground">La plataforma aún está activando la conexión con Meta. Mientras tanto, los mensajes se registran en el simulador de WhatsApp.</p>
         </div>
       )}

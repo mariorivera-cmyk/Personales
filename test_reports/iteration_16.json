@@ -1,0 +1,36 @@
+{
+  "summary": "Tested the WhatsApp Cloud 'Conectar con WhatsApp' feature while Meta is unconfigured. Backend: 17/17 pytest pass. Covers owner status (enabled=false, connection=null, 8 NOT_CREATED templates), connect returning 503, sync/disconnect returning 409, and 403 for receptionist/manager/stylist on all 4 wa-cloud endpoints. Super admin companies list includes the wa_cloud field with no WA token. Webhook cases all return ok: empty entry, template status for an unknown WABA, status for an unknown wamid, and messages for an unknown phone_number_id. A template status for a known WABA updates the templates. Simulator inbound sets delivery=simulated. Portal booking confirmation sets delivery=simulated. A fake wa_connection still delivers simulated, and admin then shows connected=true. Frontend: owner sees tab-whatsapp, a disabled 'Pendiente de configuración' button and 8 template rows marked 'Se crea al conectar'. ?tab=whatsapp deep link works. Receptionist, manager and stylist see no tab. Super admin Empresas table has a WhatsApp column and company-wa-bellavida shows 'Simulador'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/admin/companies", "issue": "Pre-existing, not WA: company.card object (incl. card.token e.g. 'tok_sim_demo') is returned to super admin. Simulated today, but should be stripped before real card tokenization."},
+      {"endpoint": "POST /api/wa/webhook", "issue": "Malformed (non-JSON) body raises json error -> 500. Meta always sends JSON, so low risk; wrap json.loads in try and return 400."},
+      {"endpoint": "wa_cloud.on_status", "issue": "update_one({'wa_id': s.get('id')}) with missing id would match {'wa_id': None} = any doc without wa_id (all simulated outgoing). Guard: skip when id falsy. Also out-of-order statuses (read then delivered) can downgrade delivery."},
+      {"endpoint": "POST /api/wa-cloud/disconnect", "issue": "Returns 200 when connection already disconnected (only checks doc existence, not status=connected). Spec-ok but inconsistent with sync's 409."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Configuración > WhatsApp", "issues": ["Disabled pending button (white text on 50%-opacity green) has low contrast; acceptable for disabled state but consider a muted gray style"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter16_wa_cloud.py", "/app/test_reports/pytest/iter16.xml"],
+  "action_items": [
+    "Optional: guard on_status against empty status id",
+    "Optional: try/except json.loads in meta_webhook -> 400",
+    "Optional: strip card.token from /api/admin/companies response"
+  ],
+  "critical_code_review_comments": [
+    "wa_send inserts then updates delivery. If deliver() raises unexpectedly, the message stays without a delivery field. deliver already catches graph errors, so this is acceptable.",
+    "list_companies runs statement() per company (N+1). This is fine at current scale.",
+    "Real Meta flow (connect/create_templates/sync/deliver sent path) is untested because no credentials are available."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter16_wa_cloud.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None persisted. TEST phone +50211112222 messages/client, TEST_WaCloud appointment, fake wa_connections TEST_PID all deleted (verified 0 remain).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "WA Cloud tests in tests/test_iter16_wa_cloud.py (uses motor directly on MONGO_URL for fake wa_connections). Settings route is /app/config (supports ?tab=whatsapp). Once META_APP_ID/SECRET/CONFIG_ID are set, status.enabled flips and wa-connect-btn appears; webhook will then require X-Hub-Signature-256."
+}
