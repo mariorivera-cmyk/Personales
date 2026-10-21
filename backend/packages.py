@@ -8,7 +8,13 @@ r = APIRouter(prefix="/api")
 OWNER = ("company_admin",)
 
 
-async def pkg_validate(c, body):
+async def pkg_validate(c, body, partial=False):
+    if partial and "items" not in body:
+        if "price" in body and float(body.get("price") or 0) <= 0:
+            raise HTTPException(400, "Indique el precio del paquete")
+        if "validity_days" in body and int(body.get("validity_days") or 0) <= 0:
+            raise HTTPException(400, "Indique la vigencia en días")
+        return
     items = []
     for it in body.get("items") or []:
         s = await one("services", {"id": it.get("service_id"), "company_id": c["cid"]})
@@ -195,7 +201,7 @@ async def checkout_options(oid: str, c=Depends(guard(ALL_STAFF))):
 
 
 async def checkout_promos(c, a, body):
-    cp, cover, pct, label = None, 0.0, 0.0, ""
+    cp, cover, pct, label, coupon_id = None, 0.0, 0.0, "", None
     if body.get("package_id"):
         cp = await one("client_packages", {"id": body["package_id"], "company_id": c["cid"], "client_id": a.get("client_id")})
         if not cp or state(cp) != "active" or remaining(cp, a["service_id"]) <= 0:
@@ -210,10 +216,9 @@ async def checkout_promos(c, a, body):
         pct, label = m["percent"], f"Membresía {m['name']} {m['percent']:g}%"
     elif body.get("coupon_code"):
         k = await find_coupon(c["cid"], body["coupon_code"])
-        pct, label = float(k["percent"]), f"Cupón {k['code']} {float(k['percent']):g}%"
-        await db.loyalty_coupons.update_one({"id": k["id"]}, {"$inc": {"uses": 1}})
+        pct, label, coupon_id = float(k["percent"]), f"Cupón {k['code']} {float(k['percent']):g}%", k["id"]
     promo = round((a["price"] - cover) * pct / 100, 2)
-    return {"cp": cp, "cover": cover, "promo": promo, "label": label, "unit_value": float(cp["unit_value"]) if cp else 0}
+    return {"cp": cp, "cover": cover, "promo": promo, "label": label, "coupon_id": coupon_id, "unit_value": float(cp["unit_value"]) if cp else 0}
 
 
 async def package_notices():

@@ -1,0 +1,40 @@
+{
+  "summary": "Tested service packages and the membership/coupon discounts at checkout. Backend: 30/30 pytest pass (tests/test_iter17_packages.py). Covered: package CRUD validation on create and PUT (no items, price<=0, validity<=0, qty 0, bad service), receptionist 403 on catalog write, selling (payment-sum validation, mixed payments, expires=today+validity, unit_value, sale kind=package shown in /api/cash, WA confirmation message), checkout-options, and package checkout (cover = service price, total 0 with payments [], tip-only payment, package_cover/client_package_id stored on the sale, commission on unit value, appointment completed, session decremented). Also covered: voiding a service sale (owner only) restores the session; voiding a package with sessions used returns 400 through both endpoints, and receptionist gets 403; voiding an unused package through the sale endpoint works; manual use (service not included -> 400, exhausted item -> 400); exhausted and expired packages not offered at checkout and rejected if forced; status filter; report numbers; WA notices for 1 left and last used; coupon check (case-insensitive, invalid, expired, regex-injection safe); coupon and membership at checkout ((price-cover)*10%); membership+coupon together -> 400; membership on a client without one -> 400; regression for manual discount reason and payment-sum checks; OTP flow plus portal account packages. Frontend (Playwright): catalog create with item editor, validation toasts (no items, price 0, edit validity 0), edit save, sell dialog (phone lookup, select, mixed payment, submit disabled until sums match), sold table shows Vigente, KPIs update, client-detail panel with 'Usar sesión' decrement (button hidden once exhausted), Agenda checkout (package pre-checked, 'Nada que cobrar', tip recalculation, uncheck restores total, submit), coupon apply (invalid -> toast, bienvenida10 -> Q162), membership checkbox and mutual exclusion with coupon, discount-reason gating, portal 'Mis paquetes'. All core flows work. A few minor issues are listed below.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/appointments/{id}/checkout (packages.checkout_promos)", "issue": "Coupon 'uses' is incremented inside checkout_promos BEFORE check_payments and set_status. A failed checkout (for example a wrong payment sum) still counts a coupon use. Reproduced: uses 0 -> 1 after a 400. Increment it only after the sale is inserted."},
+      {"endpoint": "POST /api/appointments/{id}/checkout", "issue": "Deposit plus full package cover: total = max(0, price - cover - deposit) silently swallows the deposit. Reproduced: deposit 50 with a package covering 180 gives total 0, deposit_applied 50 and no credit or refund. Decide on a policy (for example cap deposit_applied at the remaining amount and flag a refund) or warn the cashier."},
+      {"endpoint": "POST /api/appointments/{id}/checkout", "issue": "E.set_status('completed') runs before PK.consume. If consume raises (409 race), the appointment stays completed with no sale. Consume first, or roll back."},
+      {"endpoint": "PUT /api/packages/{id}", "issue": "validate requires the full body, so a partial update such as {active:false} returns 400 'Agregue al menos un servicio'. The UI always sends the full doc, so this is OK today. PUT on a nonexistent id returns 200 null (pre-existing crud behaviour; should be 404)."},
+      {"endpoint": "Loyalty on package-covered service", "issue": "Points are still awarded on the full appointment price (18 pts for a Q180 service fully covered by the package). The package sale itself awards none. Confirm this is intended."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Packages > Vendidos status filter", "issue": "Stale-response race. On mount the list loads twice with status=''. If the filter is changed quickly, the earlier unfiltered response can arrive last and overwrite the filtered list (seen once: the 'Vencido' filter showed a Vigente row). It works when given time. Add an ignore flag or AbortController in the load effect.", "selector": "[data-testid='sold-status-filter']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Checkout dialog", "issues": ["Breakdown text starts with '· Cupón: -Q18.00' or '· Membresía: ...' (leading dot) when no package is used", "After checking Membresía, the previously typed coupon code stays in the input. Harmless, but confusing.", "The Appointment dialog stays visible behind the Checkout dialog (stacked overlays). This is pre-existing."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter17_packages.py", "/app/backend/tests/probe_iter17.py", "/app/backend/tests/ui_iter17_seed.py", "/app/test_reports/pytest/iter17.xml"],
+  "action_items": [
+    "Move the loyalty_coupons uses increment to after a successful sale insert",
+    "Define the deposit handling when a package covers the service (don't silently absorb the deposit)",
+    "Consume the package session before marking the appointment completed (or roll back on failure)",
+    "Optional: guard the Sold list load against stale responses; remove the leading '·' in checkout-breakdown"
+  ],
+  "critical_code_review_comments": [
+    "unconsume() finds the package by uses.appointment_id with no company filter. Safe because ids are unique, but add company_id for consistency.",
+    "package_notices filters on the stored status 'active'. Exhausted packages keep the stored status 'active' (state is computed), so the remaining()>0 check is what prevents the notice. That is fine but fragile.",
+    "Report 'used' includes sessions of expired packages, while 'pending' only counts active ones. This is consistent with the UI labels."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter17_packages.py", "/app/backend/tests/probe_iter17.py", "/app/backend/tests/ui_iter17_seed.py"],
+  "success_rate": {"backend": "100% (30/30)", "frontend": "97% (1 low race issue)"},
+  "seed_data_creation": "All test data removed (verified 0 remaining): TEST_ packages, client_packages, package/service sales, appointments, clients +50255017701/02/11/12, wa_messages, otp_codes, expired coupon TEST_EXPIRED5. BIENVENIDA10 'uses' field unset (it was absent originally). Test-client memberships were on deleted TEST clients; no seeded client was modified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest with '-n 0' (xdist is enabled by default and breaks the module-scoped ordering). Test checkout by creating the appointment via staff API in the future, then moving its date into the past in Mongo (make_appt helper in test_iter17_packages.py). For UI, don't put two seeded appointments at the same stylist/time or the agenda cards overlap. Bella Vida: Tratamiento capilar 81a40e910fdd Q180, Corte c41db866d7a8 Q150, Carla commission 30%, membership Oro 10%, coupon BIENVENIDA10 10%."
+}

@@ -19,7 +19,7 @@ def crud(name, coll, write=("company_admin",), mod=None, create=True, before=Non
             if before:
                 await before(c, body)
             if validate:
-                await validate(c, body)
+                await validate(c, body, False)
             doc = {**clean(body), "id": uid(), "company_id": c["cid"], "created_at": now_iso()}
             await audit(c["user"], c["cid"], "create", name, doc.get("name", doc["id"]))
             out = await insert(coll, doc)
@@ -30,7 +30,7 @@ def crud(name, coll, write=("company_admin",), mod=None, create=True, before=Non
     @r.put(f"/{name}/{{oid}}", name=f"update_{name}")
     async def _update(oid: str, body: dict = Body(...), c=Depends(guard(write, mod))):
         if validate:
-            await validate(c, body)
+            await validate(c, body, True)
         await db[coll].update_one({"id": oid, "company_id": c["cid"]}, {"$set": clean(body)})
         await audit(c["user"], c["cid"], "update", name, oid)
         out = await one(coll, {"id": oid})

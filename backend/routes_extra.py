@@ -69,8 +69,11 @@ async def checkout(oid: str, body: dict = Body(...), c=Depends(guard(ALL_STAFF))
     pr = await PK.checkout_promos(c, a, body)
     if discount < 0 or tip < 0 or discount + pr["cover"] + pr["promo"] > a["price"] + 0.001:
         raise HTTPException(400, "Descuento o propina inválidos")
-    dep = float(a.get("deposit_paid") or 0)
-    total = max(0, round(a["price"] - discount - pr["cover"] - pr["promo"] - dep + tip, 2))
+    dep_paid = float(a.get("deposit_paid") or 0)
+    due = round(a["price"] - discount - pr["cover"] - pr["promo"], 2)
+    dep = min(dep_paid, due)
+    excess = round(dep_paid - dep, 2)
+    total = round(due - dep + tip, 2)
     pays = check_payments(body.get("payments") or [], total)
     st = await one("stylists", {"id": a["stylist_id"]}) or {}
     svc = await one("services", {"id": a["service_id"]}) or {}
@@ -82,20 +85,26 @@ async def checkout(oid: str, body: dict = Body(...), c=Depends(guard(ALL_STAFF))
     tips_in = ru["tips_in_commission"] or bool(st.get("tips_in_commission"))
     base = fixed if ru["commission_model"] == "fixed" else (net + pr["unit_value"]) * pct / 100
     comm = round(base + (tip * pct / 100 if tips_in and ru["commission_model"] != "fixed" else 0), 2)
+    if pr["cp"]:
+        await PK.consume(c["cid"], pr["cp"], a["service_id"], c["user"], oid)
     try:
         await E.set_status(c["cid"], oid, "completed", c["user"])
     except E.BookingError as e:
+        if pr["cp"]:
+            await PK.unconsume(oid)
         raise HTTPException(400, e.msg)
-    if pr["cp"]:
-        await PK.consume(c["cid"], pr["cp"], a["service_id"], c["user"], oid)
     sale = {"id": uid(), "company_id": c["cid"], "kind": "service", "appointment_id": oid, "branch_id": a["branch_id"], "branch_name": a["branch_name"],
             "stylist_id": a["stylist_id"], "stylist_name": a["stylist_name"], "client_name": a["client_name"],
             "description": ", ".join([a["service_name"]] + a.get("addon_names", [])), "date": today(), "subtotal": a["price"],
             "discount": discount, "discount_reason": body.get("discount_reason", ""), "tip": tip, "deposit_applied": dep, "net": net,
             "payments": pays, "total": total, "commission": comm, "created_by": c["user"]["email"], "voided": False, "created_at": now_iso(),
             "package_cover": pr["cover"], "client_package_id": pr["cp"]["id"] if pr["cp"] else None, "package_name": pr["cp"]["name"] if pr["cp"] else "",
-            "promo": pr["promo"], "promo_label": pr["label"]}
+            "promo": pr["promo"], "promo_label": pr["label"], "deposit_excess": excess}
     await insert("sales", sale)
+    if pr["coupon_id"]:
+        await db.loyalty_coupons.update_one({"id": pr["coupon_id"]}, {"$inc": {"uses": 1}})
+    if excess > 0:
+        await notify_company(c["cid"], "Anticipo por devolver", f"{a['client_name']}: el anticipo de Q{dep_paid:.2f} supera lo cobrado en {a['service_name']} ({a['date']}). Devolver Q{excess:.2f}.")
     await db.appointments.update_one({"id": oid}, {"$set": {"paid_net": net, "tip": tip, "commission": comm, "sale_id": sale["id"], "paid_date": today()}})
     await audit(c["user"], c["cid"], "checkout", "appointment", f"{oid} total {total}" + (f" descuento {discount}: {body.get('discount_reason')}" if discount else ""))
     return sale
@@ -196,7 +205,7 @@ async def commissions(start: str, end: str, format: str = "", c=Depends(guard(MA
 @r.get("/service-templates")
 async def service_templates(c=Depends(guard(("company_admin",)))):
     f = 1 / 7.8 if c["company"].get("currency") == "USD" else 1
-    return [{"name": n, "category": cat, "duration": d, "price": round(p * f, 2)} for n, cat, d, p in TEMPLATES]
+    return [{"name": n, "category": cat, "duration": d, "prep_minutes": 0, "price": round(p * f, 2)} for n, cat, d, p in TEMPLATES]
 
 
 def cat_q(cid, name):
@@ -264,7 +273,7 @@ async def add_templates(body: dict = Body(...), c=Depends(guard(("company_admin"
     for it in items:
         await ensure_category(c["cid"], it.get("category"))
         await insert("services", {"id": uid(), "company_id": c["cid"], "name": it["name"], "category": it.get("category", ""), "description": "",
-                                  "duration": int(it["duration"]), "price": float(it["price"]), "prep_minutes": 0, "cleanup_minutes": 10,
+                                  "duration": int(it["duration"]), "price": float(it["price"]), "prep_minutes": max(0, int(it.get("prep_minutes") or 0)), "cleanup_minutes": 10,
                                   "deposit": 0, "stylist_ids": [], "active": True, "created_at": now_iso()})
     await audit(c["user"], c["cid"], "create", "services", f"{len(items)} desde plantilla")
     return {"created": len(items)}

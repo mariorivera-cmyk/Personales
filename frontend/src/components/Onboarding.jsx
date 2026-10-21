@@ -139,14 +139,18 @@ export function TemplatesButton({ onDone }) {
       <Button variant="outline" onClick={load} data-testid="service-templates-btn">Usar plantillas</Button>
       {open && createPortal(
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setOpen(false)}>
-          <div className="max-h-[85vh] w-full max-w-xl overflow-auto rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()} data-testid="templates-dialog">
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-4 sm:p-6" onClick={(e) => e.stopPropagation()} data-testid="templates-dialog">
             <h3 className="mb-3 font-heading text-lg font-bold">Plantillas de servicios (editables)</h3>
+            <div className="sticky top-0 z-10 mb-2 grid grid-cols-[auto_minmax(0,1fr)_52px_52px_64px] items-end gap-1.5 border-b bg-white pb-2 text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[11px] sm:tracking-wider text-slate-500 sm:grid-cols-[auto_minmax(0,1fr)_90px_90px_100px] sm:gap-3" data-testid="templates-header">
+              <span className="w-5" /><span>Servicio</span><span>Duración (min)</span><span><span className="sm:hidden">Prep. (min)</span><span className="hidden sm:inline">Preparación (min)</span></span><span>Precio</span>
+            </div>
             {items.map((x, i) => (
-              <div key={x.name} className="mb-2 grid grid-cols-[auto_1fr_80px_90px] items-center gap-3 text-sm">
+              <div key={x.name} className="mb-2 grid grid-cols-[auto_minmax(0,1fr)_52px_52px_64px] items-center gap-1.5 text-sm sm:grid-cols-[auto_minmax(0,1fr)_90px_90px_100px] sm:gap-3">
                 <input type="checkbox" id={`tpl-${i}`} className="h-5 w-5 cursor-pointer accent-[hsl(var(--primary))]" checked={x.on} onChange={(e) => set(i, "on", e.target.checked)} data-testid={`template-check-${i}`} />
                 <label htmlFor={`tpl-${i}`} className="cursor-pointer py-1">{x.name} <span className="text-xs text-muted-foreground">{x.category}</span></label>
-                <input type="number" className="field h-8" value={x.duration} onChange={(e) => set(i, "duration", e.target.value)} title="Minutos" />
-                <input type="number" className="field h-8" value={x.price} onChange={(e) => set(i, "price", e.target.value)} title="Precio" />
+                <input type="number" className="field h-8" value={x.duration} onChange={(e) => set(i, "duration", e.target.value)} title="Duración en minutos" data-testid={`template-duration-${i}`} />
+                <input type="number" min="0" className="field h-8" value={x.prep_minutes} onChange={(e) => set(i, "prep_minutes", e.target.value)} title="Tiempo de preparación en minutos" data-testid={`template-prep-${i}`} />
+                <input type="number" className="field h-8" value={x.price} onChange={(e) => set(i, "price", e.target.value)} title="Precio" data-testid={`template-price-${i}`} />
               </div>
             ))}
             <div className="mt-3 flex gap-2">

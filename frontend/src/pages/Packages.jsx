@@ -12,8 +12,13 @@ import { SellPackageDialog, PkgBadge, PkgItems, PK_STATUS } from "@/components/P
 function Sold({ reload, owner }) {
   const [rows, setRows] = useState([]);
   const [status, setStatus] = useState("");
-  const load = () => api.get("/client-packages", { params: { status } }).then((r) => setRows(r.data)).catch((e) => toast.error(errMsg(e)));
-  useEffect(() => { load(); }, [status, reload]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [n, setN] = useState(0);
+  const load = () => setN((x) => x + 1);
+  useEffect(() => {
+    let live = true;
+    api.get("/client-packages", { params: { status } }).then((r) => { if (live) setRows(r.data); }).catch((e) => toast.error(errMsg(e)));
+    return () => { live = false; };
+  }, [status, reload, n]);
   const voidIt = async (cp) => {
     const reason = window.prompt("Motivo de la anulación");
     if (!reason) return;
