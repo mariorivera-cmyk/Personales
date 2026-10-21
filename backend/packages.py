@@ -8,27 +8,38 @@ r = APIRouter(prefix="/api")
 OWNER = ("company_admin",)
 
 
+def num(body, key, cast, msg):
+    try:
+        v = cast(float(body.get(key)))
+    except (TypeError, ValueError):
+        raise HTTPException(400, msg)
+    if v <= 0:
+        raise HTTPException(400, msg)
+    body[key] = v
+
+
 async def pkg_validate(c, body, partial=False):
     if partial and "items" not in body:
-        if "price" in body and float(body.get("price") or 0) <= 0:
-            raise HTTPException(400, "Indique el precio del paquete")
-        if "validity_days" in body and int(body.get("validity_days") or 0) <= 0:
-            raise HTTPException(400, "Indique la vigencia en días")
+        if "price" in body:
+            num(body, "price", float, "Indique el precio del paquete")
+        if "validity_days" in body:
+            num(body, "validity_days", int, "Indique la vigencia en días")
         return
     items = []
     for it in body.get("items") or []:
         s = await one("services", {"id": it.get("service_id"), "company_id": c["cid"]})
-        q = int(it.get("qty") or 0)
+        try:
+            q = int(it.get("qty") or 0)
+        except (TypeError, ValueError):
+            q = 0
         if not s or q <= 0:
             raise HTTPException(400, "Revise los servicios y cantidades del paquete")
         items.append({"service_id": s["id"], "service_name": s["name"], "qty": q})
     if not items:
         raise HTTPException(400, "Agregue al menos un servicio al paquete")
-    if float(body.get("price") or 0) <= 0:
-        raise HTTPException(400, "Indique el precio del paquete")
-    if int(body.get("validity_days") or 0) <= 0:
-        raise HTTPException(400, "Indique la vigencia en días")
-    body.update(items=items, price=float(body["price"]), validity_days=int(body["validity_days"]))
+    num(body, "price", float, "Indique el precio del paquete")
+    num(body, "validity_days", int, "Indique la vigencia en días")
+    body.update(items=items)
 
 
 crud("packages", "packages", validate=pkg_validate)

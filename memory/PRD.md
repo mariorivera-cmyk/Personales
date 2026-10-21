@@ -99,3 +99,11 @@ Integrar WhatsApp real y la pasarela cuando el usuario tenga las credenciales.
 ## Backlog
 - P1: Activar credenciales Meta y probar conexión real con un número de prueba.
 - P2: Botones "Enviar por WhatsApp" manuales (wa.me) mientras no haya conexión; horarios con botones interactivos en el asistente.
+
+
+## Implemented (2026-10-20) — Paquetes de servicios + membresías/cupones en Caja
+- backend/packages.py: catálogo /api/packages (servicios x sesiones, precio, vigencia), venta /api/client-packages (cobro en caja, venta kind=package), uso manual, anulación (solo dueño y sin sesiones usadas), reporte, avisos WA (1 sesión restante, última sesión, vence en 7 días).
+- Checkout: "Usar paquete" automático (cubre precio del servicio, comisión sobre valor unitario), membresía % o cupón % (no ambos), anticipo excedente → aviso "Anticipo por devolver". Anular cobro restaura la sesión.
+- Portal "Mis citas" muestra Mis paquetes. Página /app/paquetes y panel en ficha de clienta.
+- Plantillas de servicios: títulos de columnas y tiempo de preparación editable; validación y sin duplicados.
+- Pendiente de decisión: puntos de fidelización se otorgan sobre el precio completo aunque lo cubra un paquete.

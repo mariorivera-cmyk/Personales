@@ -271,9 +271,19 @@ async def delete_category(oid: str, c=Depends(guard(("company_admin",)))):
 async def add_templates(body: dict = Body(...), c=Depends(guard(("company_admin",)))):
     items = body.get("items") or []
     for it in items:
+        try:
+            dur, price, prep = int(float(it.get("duration"))), float(it.get("price")), int(float(it.get("prep_minutes") or 0))
+        except (TypeError, ValueError):
+            raise HTTPException(400, f"Revise duración, preparación y precio de {it.get('name', 'la plantilla')}")
+        if dur <= 0 or price < 0 or prep < 0:
+            raise HTTPException(400, f"Duración debe ser mayor a 0 y precio/preparación no negativos ({it.get('name', '')})")
+        it.update(duration=dur, price=price, prep_minutes=prep)
+    existing = {s["name"].strip().lower() for s in await find("services", {"company_id": c["cid"]})}
+    items = [it for it in items if it["name"].strip().lower() not in existing]
+    for it in items:
         await ensure_category(c["cid"], it.get("category"))
         await insert("services", {"id": uid(), "company_id": c["cid"], "name": it["name"], "category": it.get("category", ""), "description": "",
-                                  "duration": int(it["duration"]), "price": float(it["price"]), "prep_minutes": max(0, int(it.get("prep_minutes") or 0)), "cleanup_minutes": 10,
+                                  "duration": it["duration"], "price": it["price"], "prep_minutes": it["prep_minutes"], "cleanup_minutes": 10,
                                   "deposit": 0, "stylist_ids": [], "active": True, "created_at": now_iso()})
     await audit(c["user"], c["cid"], "create", "services", f"{len(items)} desde plantilla")
     return {"created": len(items)}

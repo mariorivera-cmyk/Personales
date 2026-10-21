@@ -125,13 +125,17 @@ export function TemplatesButton({ onDone }) {
   const [items, setItems] = useState([]);
   const { checkSetup } = useAuth();
   const load = async () => { const r = await api.get("/service-templates"); setItems(r.data.map((x) => ({ ...x, on: false }))); setOpen(true); };
+  const [busy, setBusy] = useState(false);
   const save = async () => {
     const sel = items.filter((x) => x.on);
-    await api.post("/service-templates", { items: sel });
-    toast.success(`${sel.length} servicios creados`);
-    setOpen(false);
-    onDone?.();
-    checkSetup();
+    setBusy(true);
+    try {
+      const r = await api.post("/service-templates", { items: sel });
+      toast.success(r.data.created === sel.length ? `${r.data.created} servicios creados` : `${r.data.created} servicios creados (los demás ya existían)`);
+      setOpen(false);
+      onDone?.();
+      checkSetup();
+    } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
   };
   const set = (i, k, v) => setItems(items.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
   return (
@@ -145,7 +149,7 @@ export function TemplatesButton({ onDone }) {
               <span className="w-5" /><span>Servicio</span><span>Duración (min)</span><span><span className="sm:hidden">Prep. (min)</span><span className="hidden sm:inline">Preparación (min)</span></span><span>Precio</span>
             </div>
             {items.map((x, i) => (
-              <div key={x.name} className="mb-2 grid grid-cols-[auto_minmax(0,1fr)_52px_52px_64px] items-center gap-1.5 text-sm sm:grid-cols-[auto_minmax(0,1fr)_90px_90px_100px] sm:gap-3">
+              <div key={x.name} className="tpl-row mb-2 grid grid-cols-[auto_minmax(0,1fr)_52px_52px_64px] items-center gap-1.5 text-sm sm:grid-cols-[auto_minmax(0,1fr)_90px_90px_100px] sm:gap-3">
                 <input type="checkbox" id={`tpl-${i}`} className="h-5 w-5 cursor-pointer accent-[hsl(var(--primary))]" checked={x.on} onChange={(e) => set(i, "on", e.target.checked)} data-testid={`template-check-${i}`} />
                 <label htmlFor={`tpl-${i}`} className="cursor-pointer py-1">{x.name} <span className="text-xs text-muted-foreground">{x.category}</span></label>
                 <input type="number" className="field h-8" value={x.duration} onChange={(e) => set(i, "duration", e.target.value)} title="Duración en minutos" data-testid={`template-duration-${i}`} />
@@ -155,7 +159,7 @@ export function TemplatesButton({ onDone }) {
             ))}
             <div className="mt-3 flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => setOpen(false)} data-testid="templates-cancel">Cancelar</Button>
-              <Button className="flex-1" onClick={save} disabled={!items.some((x) => x.on)} data-testid="templates-save">Agregar seleccionados</Button>
+              <Button className="flex-1" onClick={save} disabled={busy || !items.some((x) => x.on)} data-testid="templates-save">{busy ? "Agregando..." : "Agregar seleccionados"}</Button>
             </div>
           </div>
         </div>, document.body

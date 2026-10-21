@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 18: tested prep time in the service templates dialog and the iteration_17 fixes. Backend: 16/17 pass in the new tests/test_iter18_fixes.py (run with -n0); the iter17 regression suite passes 30/30. Templates: GET returns prep_minutes 0; POST stores prep_minutes; negative or missing values become 0; receptionist gets 403. Coupon: a checkout that fails on the payment sum does not increment uses; a successful one increments by 1. Deposit with full package cover: total = tip, deposit_applied 0, deposit_excess 50, and the 'Anticipo por devolver' notification is created. Partial case (due 30, deposit 50): applied 30, excess 20. Normal deposit: no excess and no notification. A failed package checkout neither consumes a session nor completes the appointment. Package checkout decrements exactly once, and voiding the sale restores the session. PUT /packages partial {active:false} returns 200 and keeps items and price; partial price<=0 or validity<=0 returns 400; full-update validation is unchanged. One failure: partial PUT with a non-numeric price returns 500. Frontend (Playwright): the templates dialog header shows Servicio / Duración (min) / Preparación (min) / Precio on desktop and 'Prep. (min)' at 390px; all 14 rows have duration/prep/price inputs; prep defaults to 0; header columns line up exactly with the row inputs; no horizontal overflow at 390px. Selecting 'Corte de dama' with prep 15 and saving creates the service (GET /api/services shows prep_minutes 15). Agenda checkout: with deposit and package, the package is pre-checked, total Q0.00, 'Nada que cobrar', and the checkout-deposit-excess warning says 'devuelva Q50.00'. On submit the sale stores deposit_applied 0 and deposit_excess 50. Coupon breakdown reads 'Cupón: -Q18.00' with no leading dot. Checking Membresía clears the coupon input, and the breakdown reads 'Membresía: -Q18.00' (total Q162). The sale is stored with 'Membresía Oro 10%' and coupon uses do not change. Sold filter: with the unfiltered and 'active' responses delayed by 2.5s and a quick switch to 'Vencido', only the Vencido row shows, so the stale race is fixed. All test data was removed (services back to 11; packages, client_packages, clients, appointments, sales, wa, notifications and BIENVENIDA10 uses restored).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/packages/{id} (pkg_validate partial) and POST /api/packages", "issue": "A non-numeric price or validity_days (e.g. {price:'abc'}) raises ValueError in float()/int() and returns 500 instead of 400. The partial path also stores price as sent: {price:'200'} is saved as the string '200', with no coercion to float (the full path does coerce). Wrap the conversions in try/except and return 400, and coerce on the partial path too."},
+      {"endpoint": "PUT /api/packages/{nonexistent}", "issue": "Still returns 200 null; should be 404 (pre-existing crud behaviour)."},
+      {"endpoint": "POST /api/service-templates", "issue": "An empty duration, price or prep string from the UI (the user clears the input) makes int('')/float('') raise and returns 500. No server-side validation for duration<=0 or price<0. Templates also create duplicates if a service with the same name already exists."},
+      {"endpoint": "POST /api/appointments/{id}/checkout", "issue": "A no_show appointment can be checked out (200; it goes no_show -> completed), so the set_status-failure rollback path could not be forced. The unconsume rollback only covers E.BookingError. Any other exception after consume (e.g. sales insert) leaves the session consumed. Consume also sends 'last session' or '1 left' WA notices before set_status, and these are not retracted on rollback."},
+      {"endpoint": "Coupon uses increment", "issue": "The increment is now after insert (correct). It is a non-atomic read-then-inc, and find_coupon has no max-uses check, so there is no limit enforcement if one is intended later."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Templates save", "issue": "save() in TemplatesButton has no try/catch or loading state. If the POST fails (e.g. a cleared numeric input gives a 500), there is no error toast and the dialog stays with no feedback. A double click can create duplicate services.", "affected_selectors": ["[data-testid='templates-save']"]}
+    ],
+    "design_issues": [
+      {"screen": "Templates dialog at 390px mobile", "issues": ["The 52px duration column clips 3-digit values ('120' shows as '12', '180' as '18', '150' as '15') because the number-input spinner and padding take the space. The 64px price column clips '1100' and '450' (last digit cut). Hide the spinners on these inputs (appearance:textfield) and/or reduce the horizontal padding, or widen those columns to about 60/72px.", "There is no horizontal overflow and the header lines up with the inputs (verified by bounding boxes)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter18_fixes.py", "/app/backend/tests/test_iter17_packages.py", "/app/backend/tests/ui_iter18_seed.py", "/app/backend/tests/cleanup_iter18.py", "/app/test_reports/pytest/iter18.xml", "/app/test_reports/pytest/iter18_regress17.xml"],
+  "action_items": [
+    "pkg_validate: catch ValueError/TypeError on price and validity_days and return 400; coerce types on the partial path too",
+    "Templates dialog on mobile: make the number inputs show 3-4 digits (remove spinners or widen the columns)",
+    "TemplatesButton.save: add try/catch with an error toast and a busy/disabled state; backend add_templates should validate duration>0 and price>=0 and return 400 on bad numbers",
+    "Optional: broaden the checkout rollback (try/except Exception around set_status and insert) and decide whether a no_show appointment may be checked out"
+  ],
+  "critical_code_review_comments": [
+    "routes_extra.checkout: consume runs before set_status and is rolled back only on BookingError. Use a generic except, and roll back if insert('sales') fails.",
+    "packages.pkg_validate partial branch: values are not normalized (float/int), so string values persist.",
+    "routes_extra.add_templates: no input validation (int()/float() on raw values) and no dedupe by name."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter18_fixes.py", "/app/backend/tests/ui_iter18_seed.py", "/app/backend/tests/cleanup_iter18.py"],
+  "success_rate": {"backend": "94% (16/17 new; 30/30 iter17 regression)", "frontend": "95% (all flows pass; one mobile design issue)"},
+  "test_credentials": "admin@bellavida.com / Demo2026!, recepcion@bellavida.com / Demo2026! (from /app/memory/test_credentials.md). bcrypt hash is $2b$; login sets the access_token cookie.",
+  "seed_data_creation": "Temporary TEST_It18 client (+50255018801), package, client_packages and appointments, plus one template service 'Corte de dama'. All deleted afterwards.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest with -n0 -p no:randomly (xdist is on by default and breaks the module-scoped ordering). Carla (a14fc0cc74ec) cannot do Corte; use Mascarilla 17f399d32a39 (Q120, any stylist) or Tratamiento 81a40e910fdd (Q180). The system date is around 2026-10-21. For UI checkout, seed with tests/ui_iter18_seed.py (appointments are moved to yesterday at 09:00 and 13:00) and clean with the 'clean' arg. Before the template UI tests, snapshot the service ids to /tmp/it18_snap.json and run cleanup_iter18.py afterwards."
+}
