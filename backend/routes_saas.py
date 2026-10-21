@@ -12,8 +12,8 @@ from billing import (DEFAULT_SETTINGS, psettings, breakdown, monthly_value, crea
                      advance_preview, advance_charge)
 
 r = APIRouter(prefix="/api")
-BLOCKED = {"paused": "La cuenta de su empresa está en pausa. Comuníquese con soporte de SalonFlow.",
-           "cancelled": "La cuenta de su empresa fue cancelada. Comuníquese con soporte de SalonFlow si desea reactivarla."}
+BLOCKED = {"paused": "La cuenta de su empresa está en pausa. Comuníquese con soporte de Cítalo.",
+           "cancelled": "La cuenta de su empresa fue cancelada. Comuníquese con soporte de Cítalo si desea reactivarla."}
 STATUS_LABEL = {"trial": "Prueba (30 días)", "active": "Activa", "paused": "En pausa", "cancelled": "Cancelada"}
 TASKS = set()
 

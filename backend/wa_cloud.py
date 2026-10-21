@@ -12,20 +12,20 @@ OWNER = ("company_admin",)
 EX = "Salón Bella Vida"
 
 TEMPLATES = [
-    {"name": "salonflow_confirmacion", "category": "UTILITY", "label": "Confirmación de cita", "kinds": ["confirmation"],
+    {"name": "citalo_confirmacion", "category": "UTILITY", "label": "Confirmación de cita", "kinds": ["confirmation"],
      "body": "Confirmación de su cita en {{1}}: {{2}}", "example": "su cita de Corte quedó para el 2026-03-10 a las 10:00."},
-    {"name": "salonflow_recordatorio", "category": "UTILITY", "label": "Recordatorio de cita", "kinds": ["reminder"],
+    {"name": "citalo_recordatorio", "category": "UTILITY", "label": "Recordatorio de cita", "kinds": ["reminder"],
      "body": "Recordatorio de {{1}}: {{2}}", "example": "su cita de Corte es mañana a las 10:00. Responda CONFIRMAR."},
-    {"name": "salonflow_cambio_cita", "category": "UTILITY", "label": "Cita reprogramada / espacio liberado", "kinds": ["reschedule", "waitlist", "bot"],
+    {"name": "citalo_cambio_cita", "category": "UTILITY", "label": "Cita reprogramada / espacio liberado", "kinds": ["reschedule", "waitlist", "bot"],
      "body": "Actualización de su cita en {{1}}: {{2}}", "example": "su cita fue movida al 2026-03-11 a las 15:00."},
-    {"name": "salonflow_cancelacion", "category": "UTILITY", "label": "Cita cancelada", "kinds": ["cancellation", "policy"],
+    {"name": "citalo_cancelacion", "category": "UTILITY", "label": "Cita cancelada", "kinds": ["cancellation", "policy"],
      "body": "Aviso de {{1}} sobre su cita: {{2}}", "example": "su cita de Corte del 2026-03-10 fue cancelada."},
-    {"name": "salonflow_codigo", "category": "AUTHENTICATION", "label": "Código de acceso a Mis citas", "kinds": ["otp"]},
-    {"name": "salonflow_anticipo", "category": "UTILITY", "label": "Anticipo pendiente", "kinds": ["deposit"],
+    {"name": "citalo_codigo", "category": "AUTHENTICATION", "label": "Código de acceso a Mis citas", "kinds": ["otp"]},
+    {"name": "citalo_anticipo", "category": "UTILITY", "label": "Anticipo pendiente", "kinds": ["deposit"],
      "body": "Anticipo de su cita en {{1}}: {{2}}", "example": "recuerde enviar su anticipo de Q50.00 antes de las 18:00."},
-    {"name": "salonflow_resena", "category": "UTILITY", "label": "Solicitud de reseña", "kinds": ["review"],
+    {"name": "citalo_resena", "category": "UTILITY", "label": "Solicitud de reseña", "kinds": ["review"],
      "body": "Gracias por visitar {{1}}. {{2}}", "example": "¿Cómo fue su experiencia? Califíquenos aquí: https://ejemplo.com/r"},
-    {"name": "salonflow_promocion", "category": "MARKETING", "label": "Promociones y cumpleaños", "kinds": ["campaign"],
+    {"name": "citalo_promocion", "category": "MARKETING", "label": "Promociones y cumpleaños", "kinds": ["campaign"],
      "body": "Novedades de {{1}}: {{2}}", "example": "este mes 20% de descuento en tintes.", "footer": "Responda BAJA para no recibir promociones"},
 ]
 BY_KIND = {k: t["name"] for t in TEMPLATES for k in t["kinds"]}
@@ -178,7 +178,7 @@ async def deliver(cid, phone, text, kind):
     if in_window and kind != "otp":
         payload.update(type="text", text={"body": text[:4096]})
     else:
-        name = BY_KIND.get(kind, "salonflow_cambio_cita")
+        name = BY_KIND.get(kind, "citalo_cambio_cita")
         if (conn.get("templates") or {}).get(name, {}).get("status") != "APPROVED":
             return {"delivery": "failed", "delivery_error": "La plantilla aún no está aprobada por Meta"}
         if kind == "otp":

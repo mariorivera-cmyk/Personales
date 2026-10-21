@@ -6,6 +6,7 @@ import { api, errMsg, money } from "@/lib/api";
 import { useAuth } from "@/context/Auth";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/Common";
+import { CitaloLogo } from "@/components/Brand";
 
 export function CardForm({ value, onChange }) {
   return (
@@ -51,7 +52,7 @@ export default function Signup() {
     <div className="min-h-screen px-4 py-10 sm:px-8">
       <form onSubmit={submit} className="mx-auto max-w-5xl space-y-8" data-testid="signup-form">
         <div className="fade-up">
-          <Link to="/login" className="font-display text-2xl italic text-primary">SalonFlow</Link>
+          <Link to="/login" data-testid="signup-logo-link"><CitaloLogo tagline /></Link>
           <h1 className="mt-4 text-4xl font-extrabold tracking-tight sm:text-5xl">Registre su salón</h1>
           <p className="mt-2 text-muted-foreground">{data.settings.trial_days} días de prueba gratis. Sin compromiso.</p>
         </div>
@@ -105,7 +106,7 @@ export default function Signup() {
             <CardForm value={card} onChange={setCard} />
             <div className="mt-3"><Label>Cupón</Label><input className="field" value={f.coupon_code || ""} onChange={set("coupon_code")} data-testid="signup-coupon-input" /></div>
           </div>
-          <div className="flex flex-col justify-between rounded-xl bg-slate-900 p-6 text-white">
+          <div className="flex flex-col justify-between rounded-xl bg-[#2E1A47] p-6 text-white">
             <div>
               <div className="text-xs uppercase tracking-widest text-slate-400">Total después de la prueba</div>
               <div className="mt-2 text-4xl font-extrabold" data-testid="signup-total">{money(total)}</div>

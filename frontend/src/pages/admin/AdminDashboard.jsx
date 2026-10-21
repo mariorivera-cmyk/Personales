@@ -6,7 +6,7 @@ import { api, errMsg, money, download, CO_STATUS } from "@/lib/api";
 import { PageHeader, Kpi, Panel } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 
-const C = ["#C2410C", "#059669", "#D97706", "#E11D48", "#0369A1", "#475569"];
+const C = ["#2E1A47", "#FFB020", "#059669", "#E11D48", "#0369A1", "#7A4FB0"];
 
 export default function AdminDashboard() {
   const [m, setM] = useState(null);

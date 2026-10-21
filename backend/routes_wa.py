@@ -415,8 +415,8 @@ async def public_ics(slug: str, aid: str, t: str):
     br = await one("branches", {"id": a["branch_id"]}) or {}
     st = lambda d, h: d.replace("-", "") + "T" + h.replace(":", "") + "00"
     cancel = a["status"] == "cancelled"
-    ics = "\r\n".join(["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//SalonFlow//ES", f"METHOD:{'CANCEL' if cancel else 'PUBLISH'}", "BEGIN:VEVENT",
-                       f"UID:{a['id']}@salonflow", f"SEQUENCE:{len(a.get('status_log', []))}", f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
+    ics = "\r\n".join(["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Citalo//ES", f"METHOD:{'CANCEL' if cancel else 'PUBLISH'}", "BEGIN:VEVENT",
+                       f"UID:{a['id']}@citalo", f"SEQUENCE:{len(a.get('status_log', []))}", f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
                        f"DTSTART;TZID=America/Guatemala:{st(a['date'], a['time'])}", f"DTEND;TZID=America/Guatemala:{st(a['date'], a['end_time'])}",
                        f"SUMMARY:{a['service_name']} - {c['name']}", f"LOCATION:{br.get('address') or br.get('name', '')}",
                        f"DESCRIPTION:Con {a['stylist_name']}. Tel. {br.get('phone') or c.get('phone', '')}", f"STATUS:{'CANCELLED' if cancel else 'CONFIRMED'}",

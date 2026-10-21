@@ -71,7 +71,7 @@ function Main() {
                 <XAxis dataKey="date" fontSize={11} />
                 <YAxis fontSize={11} />
                 <Tooltip />
-                <Area type="monotone" dataKey="ventas" stroke="#C2410C" fill="#C2410C33" strokeWidth={2} />
+                <Area type="monotone" dataKey="ventas" stroke="#2E1A47" fill="#FFB02055" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>

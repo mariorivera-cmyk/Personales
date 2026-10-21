@@ -54,7 +54,7 @@ function ActivatePanel({ plans, current, onDone }) {
           <div><Label>NIT (o CF)</Label><input className="field" value={f.nit || ""} onChange={(e) => setF({ ...f, nit: e.target.value })} data-testid="activate-nit" /></div>
           <CardForm value={card} onChange={setCard} />
         </div>
-        {q && <div className="rounded-xl bg-slate-900 p-5 text-sm text-white" data-testid="activate-quote">
+        {q && <div className="rounded-xl bg-[#2E1A47] p-5 text-sm text-white" data-testid="activate-quote">
           {q.items.map((i) => <div key={i.desc} className="flex justify-between"><span>{i.desc}</span><span>{money(i.amount)}</span></div>)}
           <div className="mt-2 flex justify-between border-t border-white/20 pt-2"><span>Subtotal</span><span>{money(q.subtotal)}</span></div>
           <div className="flex justify-between"><span>IVA ({q.tax_rate}%)</span><span>{money(q.tax)}</span></div>

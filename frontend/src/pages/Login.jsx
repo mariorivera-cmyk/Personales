@@ -4,8 +4,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/context/Auth";
 import { errMsg } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-
-const HERO = "https://images.unsplash.com/photo-1600948836101-f9ffda59d250?crop=entropy&cs=srgb&fm=jpg&q=85&w=1400";
+import { CitaloLogo, CitaloSymbol } from "@/components/Brand";
 
 export default function Login() {
   const { login } = useAuth();
@@ -25,16 +24,18 @@ export default function Login() {
   };
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
-      <div className="relative hidden lg:block">
-        <img src={HERO} alt="Salón de belleza" className="absolute inset-0 h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent" />
-        <div className="absolute bottom-12 left-12 max-w-md text-white">
-          <div className="font-display text-5xl italic">SalonFlow</div>
-          <p className="mt-3 text-lg text-white/85">Citas por WhatsApp, agenda inteligente y crecimiento para salones de belleza.</p>
+      <div className="relative hidden overflow-hidden bg-[#2E1A47] p-14 text-[#FFF7E6] lg:flex lg:flex-col lg:justify-between grain" data-testid="login-brand-panel">
+        <CitaloLogo light size="text-4xl" symbol="h-14 w-14" tagline testid="login-logo" />
+        <div className="max-w-md fade-up">
+          <div className="text-xs font-bold uppercase tracking-[0.2em] text-[#FFB020]">Valor central</div>
+          <p className="mt-3 text-4xl font-extrabold leading-tight tracking-tight">Que cada cita se cumpla.</p>
+          <p className="mt-4 text-lg text-[#FFF7E6]/80">Del chat a la silla, confirmado. Agenda, recordatorios y clientes de su salón, barbería o clínica en un solo lugar.</p>
         </div>
+        <CitaloSymbol className="pointer-events-none absolute -bottom-16 -right-16 h-80 w-80 opacity-10" />
       </div>
       <div className="flex items-center justify-center p-6">
         <form onSubmit={submit} className="w-full max-w-sm space-y-5 fade-up" data-testid="login-form">
+          <div className="lg:hidden"><CitaloLogo tagline testid="login-logo-mobile" /></div>
           <div>
             <h1 className="text-4xl font-extrabold tracking-tight">Bienvenido</h1>
             <p className="mt-1 text-sm text-muted-foreground">Ingrese a su panel de administración</p>

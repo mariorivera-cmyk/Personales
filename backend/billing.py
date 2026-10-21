@@ -332,7 +332,7 @@ def account_statement_pdf(st):
         p.drawRightString(560, y, f"{cur} {val:,.2f}")
         y -= 15
     p.setFont("Helvetica", 8)
-    p.drawString(50, 50, f"Generado {st['generated_at'][:16].replace('T', ' ')} UTC · SalonFlow")
+    p.drawString(50, 50, f"Generado {st['generated_at'][:16].replace('T', ' ')} UTC · Cítalo")
     p.showPage()
     p.save()
     return buf.getvalue()

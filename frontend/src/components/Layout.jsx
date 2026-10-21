@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/Auth";
 import { ROLES, CO_STATUS } from "@/lib/api";
+import { CitaloLogo } from "@/components/Brand";
 
 const S = ["company_admin", "branch_manager", "receptionist"];
 const ALL = [...S, "stylist"];
@@ -46,7 +47,7 @@ const ADMIN_NAV = [
 function Item({ n, onClick }) {
   return (
     <NavLink to={n.to} end={n.end} onClick={onClick} data-testid={`nav-${n.to.replace(/\//g, "-").slice(1)}`}
-      className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${isActive ? "bg-primary text-white" : "text-slate-300 hover:bg-white/10 hover:text-white"}`}>
+      className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${isActive ? "bg-[#FFB020] font-semibold text-[#2E1A47]" : "text-[#FFF7E6]/75 hover:bg-white/10 hover:text-white"}`}>
       <n.icon className="h-4 w-4" />{n.label}
     </NavLink>
   );
@@ -67,18 +68,18 @@ export default function Layout() {
   const items = COMPANY_NAV.filter((n) => (isSA || n.roles.includes(user.role)) && (!n.mod || (company?.enabled_modules || []).includes(n.mod)) && (!setup || SETUP_PATHS.includes(n.to)));
   const locked = company && ["past_due", "suspended_partial", "suspended"].includes(company.status);
   const sidebar = (
-    <aside className="flex h-full w-64 flex-col bg-slate-900 p-4 text-white grain">
+    <aside className="flex h-full w-64 flex-col bg-[#2E1A47] p-4 text-white grain">
       <div className="mb-6 px-2">
-        <div className="font-display text-2xl italic">SalonFlow</div>
-        <div className="text-xs text-slate-400">{ROLES[user.role]}</div>
+        <CitaloLogo light testid="sidebar-logo" />
+        <div className="mt-2 text-xs text-[#FFF7E6]/60">{ROLES[user.role]}</div>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto">
         {isSA && <>
-          <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Plataforma</div>
+          <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-[#FFB020]/80">Plataforma</div>
           {ADMIN_NAV.map((n) => <Item key={n.to} n={n} onClick={() => setOpen(false)} />)}
         </>}
         {company && <>
-          <div className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-widest text-slate-500">{company.name}</div>
+          <div className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-widest text-[#FFB020]/80">{company.name}</div>
           {items.map((n) => <Item key={n.to} n={n} onClick={() => setOpen(false)} />)}
           {setup && <p className="mx-3 mt-4 rounded-lg bg-white/5 p-3 text-xs leading-relaxed text-slate-400" data-testid="setup-nav-note">Cada opción aparece al completar el paso anterior de la guía de arranque.</p>}
           {pendingSkip && <NavLink to="/app" onClick={() => setOpen(false)} className="mx-3 mt-4 flex items-center gap-2 rounded-lg bg-amber-400/15 p-3 text-xs font-semibold text-amber-200 hover:bg-amber-400/25" data-testid="setup-pending-indicator">{setupInfo.pending.length === 1 ? "Falta 1 paso" : `Faltan ${setupInfo.pending.length} pasos`} para dejar su salón listo →</NavLink>}
@@ -98,7 +99,7 @@ export default function Layout() {
       <div className="sticky top-0 hidden h-screen lg:block">{sidebar}</div>
       {open && <div className="fixed inset-0 z-50 flex lg:hidden"><div className="h-full">{sidebar}</div><div className="flex-1 bg-black/40" onClick={() => setOpen(false)} /></div>}
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-40 flex items-center gap-3 border-b bg-[#FAF7F2]/80 px-4 py-3 backdrop-blur-md sm:px-8">
+        <header className="sticky top-0 z-40 flex items-center gap-3 border-b bg-[#FFF7E6]/85 px-4 py-3 backdrop-blur-md sm:px-8">
           <button className="lg:hidden" onClick={() => setOpen(!open)} data-testid="mobile-menu-btn">{open ? <X /> : <Menu />}</button>
           {isSA && company && (
             <div className="flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm text-primary" data-testid="company-context-banner">

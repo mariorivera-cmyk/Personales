@@ -107,3 +107,9 @@ Integrar WhatsApp real y la pasarela cuando el usuario tenga las credenciales.
 - Portal "Mis citas" muestra Mis paquetes. Página /app/paquetes y panel en ficha de clienta.
 - Plantillas de servicios: títulos de columnas y tiempo de preparación editable; validación y sin duplicados.
 - Pendiente de decisión: puntos de fidelización se otorgan sobre el precio completo aunque lo cubra un paquete.
+
+## Implemented (2026-10-21) — Rebranding a Cítalo
+- Nombre "Cítalo" + lema "Tu agenda, por WhatsApp." (PDF Citalo_Plan_C_Sistema_de_Marca). Componente components/Brand.jsx (CitaloSymbol SVG, CitaloLogo), favicon/íconos en public/citalo-*.png.
+- Paleta: berenjena #2E1A47 (primary, menú), mango #FFB020 (acentos, ítem activo), crema #FFF7E6 (fondo). Tipografía Plus Jakarta Sans.
+- Login con panel de marca; registro, menú, título, PDF, mensajes de bloqueo, ICS y plantillas Meta (citalo_*) renombrados. Portal: solo "Hecho con Cítalo" al pie.
+

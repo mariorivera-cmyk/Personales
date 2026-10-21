@@ -8,6 +8,7 @@ import { CancelDialog } from "@/components/Checkout";
 import { RescheduleDialog } from "@/pages/portal/RescheduleDialog";
 import { MapPin, Phone, Star, Instagram, Facebook } from "lucide-react";
 import { DAYS } from "@/lib/api";
+import { CitaloSymbol } from "@/components/Brand";
 
 const B = process.env.REACT_APP_BACKEND_URL;
 export const img = (u) => (u?.startsWith("/api") ? `${B}${u}` : u);
@@ -61,7 +62,7 @@ export function Footer({ salon }) {
   const legal = salon.legal || {};
   const texts = { terms: ["Términos y condiciones", legal.terms || DEFAULT_TERMS], privacy: ["Política de privacidad", legal.privacy || DEFAULT_TERMS] };
   return (
-    <footer className="mt-16 border-t bg-slate-900 py-8 text-sm text-slate-300" data-testid="portal-footer">
+    <footer className="mt-16 border-t bg-[#2E1A47] py-8 text-sm text-[#FFF7E6]/80" data-testid="portal-footer">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6">
         <span>© {new Date().getFullYear()} {salon.name}</span>
         <div className="flex gap-4">
@@ -69,6 +70,9 @@ export function Footer({ salon }) {
           <button onClick={() => setOpen("privacy")} className="hover:text-white" data-testid="footer-privacy">Privacidad</button>
           <a href={`https://wa.me/${(salon.whatsapp_number || "").replace("+", "")}`} className="hover:text-white" data-testid="footer-contact">Contacto</a>
         </div>
+      </div>
+      <div className="mx-auto mt-6 flex max-w-6xl items-center gap-1.5 px-6 text-xs text-[#FFF7E6]/60" data-testid="footer-made-with">
+        Hecho con <CitaloSymbol className="h-4 w-4" /><span className="font-bold text-[#FFF7E6]">Cítalo</span>
       </div>
       <Dialog open={!!open} onOpenChange={(o) => !o && setOpen(null)}>
         <DialogContent data-testid="legal-dialog"><DialogHeader><DialogTitle>{open && texts[open][0]}</DialogTitle></DialogHeader><p className="whitespace-pre-wrap text-sm">{open && texts[open][1]}</p></DialogContent>

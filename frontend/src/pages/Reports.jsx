@@ -21,7 +21,7 @@ export default function Reports() {
       <div className="mb-5 flex flex-wrap items-end gap-3">
         <div className="flex rounded-full border bg-white p-1 text-sm">
           {Object.entries(GROUPS).map(([k, l]) => (
-            <button key={k} onClick={() => setGroup(k)} className={`rounded-full px-4 py-1.5 ${group === k ? "bg-slate-900 text-white" : ""}`} data-testid={`report-group-${k}`}>{l}</button>
+            <button key={k} onClick={() => setGroup(k)} className={`rounded-full px-4 py-1.5 ${group === k ? "bg-primary text-white" : ""}`} data-testid={`report-group-${k}`}>{l}</button>
           ))}
         </div>
         <div><Label>Desde</Label><input type="date" className="field" value={start} onChange={(e) => setStart(e.target.value)} data-testid="report-start" /></div>
@@ -31,7 +31,7 @@ export default function Reports() {
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 1, height: 1 }}>
             <BarChart data={rows.slice(0, 12)}><CartesianGrid strokeDasharray="3 3" stroke="#eee" /><XAxis dataKey="name" fontSize={11} /><YAxis fontSize={11} /><Tooltip />
-              <Bar dataKey="sales" name="Ventas" fill="#C2410C" radius={[6, 6, 0, 0]} /><Bar dataKey="margin" name="Margen" fill="#059669" radius={[6, 6, 0, 0]} /></BarChart>
+              <Bar dataKey="sales" name="Ventas" fill="#2E1A47" radius={[6, 6, 0, 0]} /><Bar dataKey="margin" name="Margen" fill="#059669" radius={[6, 6, 0, 0]} /></BarChart>
           </ResponsiveContainer>
         </div>
       </Panel>

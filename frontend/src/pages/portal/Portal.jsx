@@ -32,7 +32,7 @@ function PolicyBox({ quote, cur }) {
 
 function Steps({ step }) {
   return (
-    <div className="sticky top-14 z-40 -mx-6 mb-6 flex gap-2 bg-[#FAF7F2]/90 px-6 py-2 backdrop-blur lg:static lg:mx-0 lg:px-0" data-testid="portal-steps">
+    <div className="sticky top-14 z-40 -mx-6 mb-6 flex gap-2 bg-[#FFF7E6]/90 px-6 py-2 backdrop-blur lg:static lg:mx-0 lg:px-0" data-testid="portal-steps">
       {["Servicios", "Horario", "Sus datos"].map((s, i) => (
         <div key={s} className={`flex flex-1 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium ${step >= i + 1 ? "bg-primary text-white" : "bg-white text-slate-500"}`}><span>{i + 1}</span>{s}</div>
       ))}
@@ -118,7 +118,7 @@ export default function Portal() {
   const branchStylists = salon.stylists.filter((s) => s.branch_id === f.branch_id);
   return (
     <div className="min-h-screen pb-20 lg:pb-0" data-testid="public-portal">
-      <header className="fixed top-0 z-50 w-full border-b bg-[#FAF7F2]/85 backdrop-blur-md">
+      <header className="fixed top-0 z-50 w-full border-b bg-[#FFF7E6]/85 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-6 py-3">
           {salon.logo_url && <img src={img(salon.logo_url)} alt="logo" className="h-8 w-8 rounded-full object-cover" />}
           <div className="font-display text-xl italic">{salon.name}</div>

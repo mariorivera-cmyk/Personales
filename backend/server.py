@@ -23,7 +23,7 @@ from billing import run_billing, trial_notices
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="SalonFlow SaaS API", description="API multiempresa para gestión de citas de salones de belleza",
+app = FastAPI(title="Cítalo SaaS API", description="API multiempresa para gestión de citas de salones de belleza",
               docs_url="/api/docs", openapi_url="/api/openapi.json")
 for router in (extra_router, saas_router, ops_router, wa_router, rules_router, wa_cloud_router, packages_router):
     app.include_router(router)

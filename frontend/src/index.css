@@ -1,44 +1,45 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Playfair+Display:ital,wght@0,600;1,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
     margin: 0;
-    font-family: "DM Sans", sans-serif;
+    font-family: "Plus Jakarta Sans", sans-serif;
     -webkit-font-smoothing: antialiased;
-    background: #FAF7F2;
+    background: #FFF7E6;
     color: #0F172A;
 }
 h1, h2, h3, h4, .font-heading { font-family: "Plus Jakarta Sans", sans-serif; }
-.font-display { font-family: "Playfair Display", serif; }
+.font-display { font-family: "Plus Jakarta Sans", sans-serif; font-weight: 800; font-style: normal !important; letter-spacing: -0.03em; }
 .font-mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
-::selection { background: #C2410C; color: #fff; }
+::selection { background: #FFB020; color: #2E1A47; }
 
 @layer base {
     :root {
-        --background: 36 33% 97%;
-        --foreground: 222 47% 11%;
+        --background: 41 100% 95%;
+        --foreground: 266 46% 16%;
         --card: 0 0% 100%;
-        --card-foreground: 222 47% 11%;
+        --card-foreground: 266 46% 16%;
         --popover: 0 0% 100%;
-        --popover-foreground: 222 47% 11%;
-        --primary: 17 88% 40%;
-        --primary-foreground: 0 0% 100%;
-        --secondary: 36 30% 93%;
-        --secondary-foreground: 222 47% 11%;
-        --muted: 36 25% 94%;
-        --muted-foreground: 215 16% 40%;
-        --accent: 36 40% 92%;
-        --accent-foreground: 222 47% 11%;
+        --popover-foreground: 266 46% 16%;
+        --primary: 266 46% 19%;
+        --primary-foreground: 41 100% 95%;
+        --secondary: 40 75% 90%;
+        --secondary-foreground: 266 46% 16%;
+        --muted: 40 60% 92%;
+        --muted-foreground: 266 12% 40%;
+        --accent: 40 95% 86%;
+        --accent-foreground: 266 46% 16%;
+        --mango: 39 100% 56%;
         --destructive: 347 77% 50%;
         --destructive-foreground: 0 0% 98%;
-        --border: 30 20% 87%;
-        --input: 30 20% 85%;
-        --ring: 17 88% 40%;
-        --chart-1: 17 88% 40%;
-        --chart-2: 160 84% 30%;
-        --chart-3: 38 92% 44%;
+        --border: 38 45% 84%;
+        --input: 38 40% 80%;
+        --ring: 39 100% 56%;
+        --chart-1: 266 46% 19%;
+        --chart-2: 39 100% 56%;
+        --chart-3: 160 84% 30%;
         --chart-4: 347 77% 50%;
         --chart-5: 215 25% 27%;
         --radius: 0.75rem;

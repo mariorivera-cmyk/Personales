@@ -5,6 +5,7 @@ import { api, errMsg } from "@/lib/api";
 import { useAuth } from "@/context/Auth";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/Common";
+import { CitaloLogo } from "@/components/Brand";
 
 export default function SignupSimple() {
   const nav = useNavigate();
@@ -32,7 +33,7 @@ export default function SignupSimple() {
   return (
     <div className="grid min-h-screen place-items-center px-4 py-10">
       <form onSubmit={submit} className="w-full max-w-md space-y-4 rounded-3xl border bg-white p-8 fade-up" data-testid="signup-form">
-        <Link to="/login" className="font-display text-2xl italic text-primary">SalonFlow</Link>
+        <Link to="/login" data-testid="signup-logo-link"><CitaloLogo tagline /></Link>
         <h1 className="text-3xl font-extrabold tracking-tight">Pruebe gratis 14 días</h1>
         <p className="text-sm text-muted-foreground">Sin tarjeta. El NIT y el pago se piden al activar su plan.</p>
         {[["company_name", "Nombre del salón"], ["email", "Correo", "email"], ["password", "Contraseña (mín. 8)", "password"], ["whatsapp_number", "WhatsApp del salón (+502...)"]].map(([k, l, t]) => (

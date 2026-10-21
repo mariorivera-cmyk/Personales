@@ -18,7 +18,7 @@ const hm = (t) => `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 6
 const START = 8 * 60, END = 20 * 60;
 const wd = (d) => (new Date(d + "T12:00:00").getDay() + 6) % 7;
 const mins = (s) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
-const COLORS = ["#C2410C", "#059669", "#D97706", "#E11D48", "#0369A1", "#7C2D12"];
+const COLORS = ["#2E1A47", "#059669", "#E0900A", "#E11D48", "#0369A1", "#7A4FB0"];
 
 function range(view, date) {
   if (view === "day") return [date, date];
@@ -234,7 +234,7 @@ export default function Agenda() {
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <div className="flex rounded-full border bg-white p-1 text-sm">
           {[["day", "Día"], ["week", "Semana"], ["month", "Mes"]].map(([k, l]) => (
-            <button key={k} onClick={() => setView(k)} className={`rounded-full px-4 py-1.5 transition-colors ${view === k ? "bg-slate-900 text-white" : ""}`} data-testid={`view-${k}-btn`}>{l}</button>
+            <button key={k} onClick={() => setView(k)} className={`rounded-full px-4 py-1.5 transition-colors ${view === k ? "bg-primary text-white" : ""}`} data-testid={`view-${k}-btn`}>{l}</button>
           ))}
         </div>
         <Button variant="outline" size="icon" onClick={() => setDate(addDays(date, -step))} data-testid="agenda-prev"><ChevronLeft className="h-4 w-4" /></Button>
