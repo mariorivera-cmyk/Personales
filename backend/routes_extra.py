@@ -65,10 +65,12 @@ async def checkout(oid: str, body: dict = Body(...), c=Depends(guard(ALL_STAFF))
     discount, tip = round(float(body.get("discount") or 0), 2), round(float(body.get("tip") or 0), 2)
     if discount and not (body.get("discount_reason") or "").strip():
         raise HTTPException(400, "Indique el motivo del descuento")
-    if discount < 0 or tip < 0 or discount > a["price"]:
+    import packages as PK
+    pr = await PK.checkout_promos(c, a, body)
+    if discount < 0 or tip < 0 or discount + pr["cover"] + pr["promo"] > a["price"] + 0.001:
         raise HTTPException(400, "Descuento o propina inválidos")
     dep = float(a.get("deposit_paid") or 0)
-    total = round(a["price"] - discount - dep + tip, 2)
+    total = max(0, round(a["price"] - discount - pr["cover"] - pr["promo"] - dep + tip, 2))
     pays = check_payments(body.get("payments") or [], total)
     st = await one("stylists", {"id": a["stylist_id"]}) or {}
     svc = await one("services", {"id": a["service_id"]}) or {}
@@ -76,19 +78,23 @@ async def checkout(oid: str, body: dict = Body(...), c=Depends(guard(ALL_STAFF))
     set_ = lambda d, k: d.get(k) not in (None, "")
     pct = float(svc["commission_pct"]) if set_(svc, "commission_pct") else float(st["commission_pct"]) if set_(st, "commission_pct") else float(ru["commission_percent"])
     fixed = float(st["commission_fixed"]) if set_(st, "commission_fixed") and float(st["commission_fixed"]) else float(ru["commission_fixed"])
-    net = round(a["price"] - discount, 2)
+    net = round(a["price"] - discount - pr["cover"] - pr["promo"], 2)
     tips_in = ru["tips_in_commission"] or bool(st.get("tips_in_commission"))
-    base = fixed if ru["commission_model"] == "fixed" else net * pct / 100
+    base = fixed if ru["commission_model"] == "fixed" else (net + pr["unit_value"]) * pct / 100
     comm = round(base + (tip * pct / 100 if tips_in and ru["commission_model"] != "fixed" else 0), 2)
     try:
         await E.set_status(c["cid"], oid, "completed", c["user"])
     except E.BookingError as e:
         raise HTTPException(400, e.msg)
+    if pr["cp"]:
+        await PK.consume(c["cid"], pr["cp"], a["service_id"], c["user"], oid)
     sale = {"id": uid(), "company_id": c["cid"], "kind": "service", "appointment_id": oid, "branch_id": a["branch_id"], "branch_name": a["branch_name"],
             "stylist_id": a["stylist_id"], "stylist_name": a["stylist_name"], "client_name": a["client_name"],
             "description": ", ".join([a["service_name"]] + a.get("addon_names", [])), "date": today(), "subtotal": a["price"],
             "discount": discount, "discount_reason": body.get("discount_reason", ""), "tip": tip, "deposit_applied": dep, "net": net,
-            "payments": pays, "total": total, "commission": comm, "created_by": c["user"]["email"], "voided": False, "created_at": now_iso()}
+            "payments": pays, "total": total, "commission": comm, "created_by": c["user"]["email"], "voided": False, "created_at": now_iso(),
+            "package_cover": pr["cover"], "client_package_id": pr["cp"]["id"] if pr["cp"] else None, "package_name": pr["cp"]["name"] if pr["cp"] else "",
+            "promo": pr["promo"], "promo_label": pr["label"]}
     await insert("sales", sale)
     await db.appointments.update_one({"id": oid}, {"$set": {"paid_net": net, "tip": tip, "commission": comm, "sale_id": sale["id"], "paid_date": today()}})
     await audit(c["user"], c["cid"], "checkout", "appointment", f"{oid} total {total}" + (f" descuento {discount}: {body.get('discount_reason')}" if discount else ""))
@@ -113,6 +119,9 @@ async def void_sale(sid: str, body: dict = Body(default={}), c=Depends(guard(("c
     s = await one("sales", {"id": sid, "company_id": c["cid"]})
     if not s or s["voided"]:
         raise HTTPException(400, "Cobro no válido")
+    if s.get("kind") == "package":
+        import packages as PK
+        return await PK.void_cp(s["client_package_id"], body, c)
     await db.sales.update_one({"id": sid}, {"$set": {"voided": True, "void_reason": body.get("reason", ""), "voided_by": c["user"]["email"]}})
     if s.get("appointment_id"):
         a = await one("appointments", {"id": s["appointment_id"]}) or {}
@@ -123,6 +132,9 @@ async def void_sale(sid: str, body: dict = Body(default={}), c=Depends(guard(("c
             for item in sv.get("consumes") or []:
                 await E.stock_move(c["cid"], item["product_id"], float(item.get("qty") or 1), "Anulación de cobro", sid)
         await db.appointments.update_one({"id": s["appointment_id"]}, {"$set": {"status": "confirmed"}, "$unset": {"paid_net": "", "sale_id": "", "commission": ""}})
+        if s.get("client_package_id"):
+            import packages as PK
+            await PK.unconsume(s["appointment_id"])
     for it in s.get("items", []):
         await E.stock_move(c["cid"], it["product_id"], it["qty"], "Anulación de venta", sid)
     await audit(c["user"], c["cid"], "void", "sale", f"{sid} {body.get('reason', '')}")

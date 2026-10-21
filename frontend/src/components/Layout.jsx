@@ -26,6 +26,7 @@ const COMPANY_NAV = [
   { to: "/app/estilistas", label: "Estilistas", icon: UserRound, roles: M },
   { to: "/app/bloqueos", label: "Bloqueos y vacaciones", icon: Ban, roles: M },
   { to: "/app/fidelizacion", label: "Fidelización", icon: Gift, roles: S, mod: "loyalty" },
+  { to: "/app/paquetes", label: "Paquetes", icon: Package, roles: S },
   { to: "/app/ventas", label: "Cross / Upselling", icon: TrendingUp, roles: A, mod: "upsell" },
   { to: "/app/marketing", label: "Marketing", icon: Megaphone, roles: A, mod: "marketing" },
   { to: "/app/reportes", label: "Reportes", icon: BarChart3, roles: M, mod: "reports_adv" },

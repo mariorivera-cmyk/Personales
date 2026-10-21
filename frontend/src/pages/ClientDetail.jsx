@@ -8,6 +8,7 @@ import { PageHeader, Kpi, Panel, StatusBadge, Label } from "@/components/Common"
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AppointmentForm } from "@/components/AppointmentForm";
+import { ClientPackagesPanel } from "@/components/PackageParts";
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -96,6 +97,7 @@ export default function ClientDetail() {
           </ul>
         </Panel>
       </div>
+      {canBook && <ClientPackagesPanel client={d.client} />}
       <Panel title="Historial de citas" className="mt-6" testid="client-history">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

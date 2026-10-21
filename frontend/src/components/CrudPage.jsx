@@ -27,6 +27,24 @@ function ImageInput({ id, value, onChange }) {
   );
 }
 
+function PkgItemsInput({ id, value, onChange }) {
+  const opts = useOptions({ source: "/services" });
+  const v = value || [];
+  const set = (i, k, x) => onChange(v.map((r, j) => (j === i ? { ...r, [k]: x } : r)));
+  return (
+    <div className="space-y-1" data-testid={id}>
+      {v.map((r, i) => (
+        <div key={i} className="flex gap-2">
+          <select className="field" value={r.service_id} onChange={(e) => set(i, "service_id", e.target.value)} data-testid={`${id}-service-${i}`}><option value="">— Servicio —</option>{opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+          <input type="number" min="1" className="field w-24" value={r.qty} onChange={(e) => set(i, "qty", Number(e.target.value))} data-testid={`${id}-qty-${i}`} />
+          <button type="button" onClick={() => onChange(v.filter((_, j) => j !== i))}><Trash2 className="h-4 w-4 text-rose-600" /></button>
+        </div>
+      ))}
+      <button type="button" className="text-xs text-primary" onClick={() => onChange([...v, { service_id: "", qty: 1 }])} data-testid={`${id}-add`}>+ Servicio incluido (cantidad de sesiones)</button>
+    </div>
+  );
+}
+
 function ConsumptionInput({ id, value, onChange }) {
   const opts = useOptions({ source: "/products" });
   const v = value || [];
@@ -125,6 +143,7 @@ export function FieldInput({ field, value, onChange }) {
     );
   if (field.type === "image") return <ImageInput id={id} value={value} onChange={onChange} />;
   if (field.type === "consumption") return <ConsumptionInput id={id} value={value} onChange={onChange} />;
+  if (field.type === "pkgitems") return <PkgItemsInput id={id} value={value} onChange={onChange} />;
   if (field.type === "switch") return <Switch data-testid={id} checked={value !== false} onCheckedChange={onChange} />;
   if (field.type === "hours") return <HoursEditor value={value} onChange={onChange} optional={field.optional} />;
   if (field.type === "list")
@@ -151,7 +170,7 @@ export function FormDialog({ open, onOpenChange, title, fields, initial, onSubmi
         <DialogHeader><DialogTitle className="font-heading">{title}</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {fields.filter((f) => !f.hideIf || !f.hideIf(form)).map((f) => (
-            <div key={f.key} className={f.full || ["textarea", "hours", "multi", "consumption", "image"].includes(f.type) ? "sm:col-span-2" : ""}>
+            <div key={f.key} className={f.full || ["textarea", "hours", "multi", "consumption", "image", "pkgitems"].includes(f.type) ? "sm:col-span-2" : ""}>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">{f.label}</label>
               <FieldInput field={f} value={form[f.key]} onChange={(v) => setForm((s) => ({ ...s, [f.key]: v }))} />
             </div>

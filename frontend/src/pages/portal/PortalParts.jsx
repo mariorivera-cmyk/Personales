@@ -125,6 +125,16 @@ export function MyAccount({ slug, onRepeat }) {
               </div>
             </div>
           ))}
+          {acc.packages?.length > 0 && <>
+            <h3 className="font-semibold">Mis paquetes</h3>
+            {acc.packages.map((p) => (
+              <div key={p.id} className="rounded-xl border p-3" data-testid={`my-package-${p.id}`}>
+                <div className="flex items-center justify-between"><span className="font-medium">{p.name}</span><span className={`rounded-full px-2 py-0.5 text-xs ${p.status === "active" ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>{{ active: "Vigente", exhausted: "Agotado", expired: "Vencido" }[p.status]}</span></div>
+                <div className="text-muted-foreground" data-testid={`my-package-remaining-${p.id}`}>{p.remaining} de {p.total} sesiones disponibles · vence el {p.expires}</div>
+                <div className="text-xs text-muted-foreground">{p.items.map((i) => `${i.service_name}: ${i.qty - i.used} de ${i.qty}`).join(" · ")}</div>
+              </div>
+            ))}
+          </>}
           <h3 className="font-semibold">Historial</h3>
           {acc.past.map((a) => (
             <div key={a.id} className="flex items-center justify-between rounded-xl border p-3"><span>{a.date} · {a.service_name} con {a.stylist_name}</span><Button size="sm" variant="outline" onClick={() => onRepeat(a)} data-testid={`repeat-${a.id}`}>Repetir</Button></div>

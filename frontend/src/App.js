@@ -16,6 +16,7 @@ import ClientDetail from "@/pages/ClientDetail";
 import WhatsApp from "@/pages/WhatsApp";
 import { Services, Branches, Stylists, Blocks, Waitlist, UpsellRules } from "@/pages/Resources";
 import Loyalty from "@/pages/Loyalty";
+import Packages from "@/pages/Packages";
 import Marketing from "@/pages/Marketing";
 import Reports from "@/pages/Reports";
 import CompanySettings from "@/pages/CompanySettings";
@@ -56,6 +57,7 @@ export default function App() {
             <Route path="/app/estilistas" element={<Stylists />} />
             <Route path="/app/bloqueos" element={<Blocks />} />
             <Route path="/app/fidelizacion" element={<Loyalty />} />
+            <Route path="/app/paquetes" element={<Packages />} />
             <Route path="/app/ventas" element={<UpsellRules />} />
             <Route path="/app/marketing" element={<Marketing />} />
             <Route path="/app/reportes" element={<Reports />} />

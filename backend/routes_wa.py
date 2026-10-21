@@ -356,7 +356,11 @@ async def public_account(slug: str, request: Request):
     past = [a for a in appts if a["status"] == "completed"][:20]
     keys = ("id", "service_id", "service_name", "addon_names", "stylist_id", "stylist_name", "branch_id", "branch_name", "date", "time",
             "end_time", "status", "price", "deposit_required", "deposit_status")
-    return {"phone": phone, "name": cl.get("name", ""), "points": cl.get("points", 0), "membership": cl.get("membership", ""),
+    import packages as PK
+    pks = [PK.view(x) for x in await find("client_packages", {"company_id": c["id"], "client_id": cl.get("id", "-")}, [("created_at", -1)], 30)]
+    pk_keys = ("id", "name", "items", "expires", "status", "remaining", "total")
+    return {"packages": [{k: x[k] for k in pk_keys} for x in pks if x["status"] in ("active", "exhausted", "expired")],
+            "phone": phone, "name": cl.get("name", ""), "points": cl.get("points", 0), "membership": cl.get("membership", ""),
             "upcoming": [{k: a.get(k) for k in keys} for a in up], "past": [{k: a.get(k) for k in keys} for a in past]}
 
 

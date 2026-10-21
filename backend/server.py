@@ -15,6 +15,7 @@ from routes_ops import r as ops_router
 from routes_wa import r as wa_router
 from rules import r as rules_router
 from wa_cloud import r as wa_cloud_router
+from packages import r as packages_router, package_notices
 from seed import seed_all
 from engine import run_reminders, release_unpaid
 from billing import run_billing, trial_notices
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="SalonFlow SaaS API", description="API multiempresa para gestión de citas de salones de belleza",
               docs_url="/api/docs", openapi_url="/api/openapi.json")
-for router in (extra_router, saas_router, ops_router, wa_router, rules_router, wa_cloud_router):
+for router in (extra_router, saas_router, ops_router, wa_router, rules_router, wa_cloud_router, packages_router):
     app.include_router(router)
 
 
@@ -46,6 +47,7 @@ async def scheduler():
             if ticks % 72 == 0:
                 await run_billing()
                 await trial_notices()
+                await package_notices()
         except Exception as e:
             logger.error(f"scheduler error: {e}")
         ticks += 1
